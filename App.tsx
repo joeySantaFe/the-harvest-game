@@ -157,6 +157,18 @@ const App: React.FC = () => {
         }
     }, [appState]);
 
+    // Also trigger music on any keypress (not just mouse click)
+    useEffect(() => {
+        const onKey = () => {
+            audioService.tryStartMusic();
+            if (audioService.isMusicPlaying()) {
+                window.removeEventListener('keydown', onKey);
+            }
+        };
+        window.addEventListener('keydown', onKey);
+        return () => window.removeEventListener('keydown', onKey);
+    }, []);
+
     const startCampaign = () => {
         setCampaignFuel(INITIAL_FUEL);
         setCampaignScore(0);
@@ -268,18 +280,6 @@ const App: React.FC = () => {
     const handleUserInteraction = () => {
         audioService.tryStartMusic();
     };
-
-    // Also trigger music on any keypress (not just mouse click)
-    useEffect(() => {
-        const onKey = () => {
-            audioService.tryStartMusic();
-            if (audioService.isMusicPlaying()) {
-                window.removeEventListener('keydown', onKey);
-            }
-        };
-        window.addEventListener('keydown', onKey);
-        return () => window.removeEventListener('keydown', onKey);
-    }, []);
 
     return (
         <div
