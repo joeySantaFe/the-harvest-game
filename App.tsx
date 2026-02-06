@@ -426,7 +426,7 @@ const App: React.FC = () => {
                                 <p className="text-[#0f0] font-bold mb-3">ACT I: THE DESCENT</p>
                                 <table className="w-full text-left mb-2">
                                     <tbody>
-                                        <tr><td className="text-[#0af] pr-4 py-1 w-36">THRUST</td><td>W / Space / Up Arrow</td></tr>
+                                        <tr><td className="text-[#0af] pr-4 py-1 w-36">THRUST</td><td>W / Space / Up Arrow / Left Click</td></tr>
                                         <tr><td className="text-[#0af] pr-4 py-1">ROTATE LEFT</td><td>A / Left Arrow</td></tr>
                                         <tr><td className="text-[#0af] pr-4 py-1">ROTATE RIGHT</td><td>D / Right Arrow</td></tr>
                                         <tr><td className="text-[#0af] pr-4 py-1">PAUSE</td><td>Escape</td></tr>
@@ -442,7 +442,7 @@ const App: React.FC = () => {
                                         <tr><td className="text-[#0af] pr-4 py-1">REVERSE</td><td>S</td></tr>
                                         <tr><td className="text-[#0af] pr-4 py-1">ROTATE LEFT</td><td>A</td></tr>
                                         <tr><td className="text-[#0af] pr-4 py-1">ROTATE RIGHT</td><td>D</td></tr>
-                                        <tr><td className="text-[#0af] pr-4 py-1">FIRE</td><td>Space</td></tr>
+                                        <tr><td className="text-[#0af] pr-4 py-1">FIRE</td><td>Space / Left Click</td></tr>
                                         <tr><td className="text-[#0af] pr-4 py-1">PAUSE</td><td>Escape</td></tr>
                                     </tbody>
                                 </table>
