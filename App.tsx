@@ -266,9 +266,20 @@ const App: React.FC = () => {
 
     // Handle user interaction to start/resume music (browser autoplay policy)
     const handleUserInteraction = () => {
-        // Try to start music if it was blocked by autoplay policy
         audioService.tryStartMusic();
     };
+
+    // Also trigger music on any keypress (not just mouse click)
+    useEffect(() => {
+        const onKey = () => {
+            audioService.tryStartMusic();
+            if (audioService.isMusicPlaying()) {
+                window.removeEventListener('keydown', onKey);
+            }
+        };
+        window.addEventListener('keydown', onKey);
+        return () => window.removeEventListener('keydown', onKey);
+    }, []);
 
     return (
         <div
@@ -299,7 +310,7 @@ const App: React.FC = () => {
                         </div>
 
                         <div className="flex gap-4 flex-wrap justify-center">
-                            <ArcadeButton variant="secondary" onClick={() => setAppState(AppState.HELP)}>ARCHIVES</ArcadeButton>
+                            <ArcadeButton variant="secondary" onClick={() => setAppState(AppState.HELP)}>CONTROLS</ArcadeButton>
                             <ArcadeButton variant="secondary" onClick={() => setAppState(AppState.HIGHSCORES)}>RECORDS</ArcadeButton>
                         </div>
 
@@ -408,40 +419,43 @@ const App: React.FC = () => {
                 
                 {appState === AppState.HELP && (
                     <div className="max-w-3xl w-full p-8 relative">
-                         <h2 className="text-4xl text-white mb-6 text-shadow-glow border-b border-[#0af] pb-2 text-[#0af]">ARCHIVES</h2>
+                         <h2 className="text-4xl text-white mb-6 text-shadow-glow border-b border-[#0af] pb-2 text-[#0af]">CONTROLS</h2>
                          <div className="text-[#ccc] font-mono leading-relaxed text-sm">
-                            <p className="mb-4">This Anthology simulates the three phases of the Lunar Conflict.</p>
 
                             <div className="mb-6">
-                                <p className="text-[#0f0] font-bold mb-2">ACT I: THE DESCENT</p>
-                                <p className="mb-2">Physics-based landing. Navigate to fuel depots and establish base.</p>
-                                <ul className="list-disc pl-5 mb-2">
-                                    <li>THRUST: W/Up Arrow/Space - Fire engines</li>
-                                    <li>ROTATE: A/D or Left/Right Arrows</li>
-                                    <li>Land softly on platforms. Higher multiplier = more points.</li>
-                                </ul>
+                                <p className="text-[#0f0] font-bold mb-3">ACT I: THE DESCENT</p>
+                                <table className="w-full text-left mb-2">
+                                    <tbody>
+                                        <tr><td className="text-[#0af] pr-4 py-1 w-36">THRUST</td><td>W / Space / Up Arrow</td></tr>
+                                        <tr><td className="text-[#0af] pr-4 py-1">ROTATE LEFT</td><td>A / Left Arrow</td></tr>
+                                        <tr><td className="text-[#0af] pr-4 py-1">ROTATE RIGHT</td><td>D / Right Arrow</td></tr>
+                                        <tr><td className="text-[#0af] pr-4 py-1">PAUSE</td><td>Escape</td></tr>
+                                    </tbody>
+                                </table>
                             </div>
 
                             <div className="mb-6">
-                                <p className="text-[#fa0] font-bold mb-2">ACT II: THE HARVEST</p>
-                                <p className="mb-2">Defend fuel reserves from mechanical swarm. Fuel converts to bonus lives.</p>
-                                <ul className="list-disc pl-5 mb-2">
-                                    <li className="text-[#f04]">HARVESTER (Red) - Drags fuel. Shielded. Flees when hit.</li>
-                                    <li className="text-[#fa0]">SPRINTER (Orange) - Armed. High speed. Shoots players.</li>
-                                    <li className="text-[#b0f]">EXTERMINATOR (Purple) - Rams players. Flanks when kited.</li>
-                                    <li className="text-[#0ff]">SHIELD POWERUP - 15s invulnerability. Ram enemies or push fuel.</li>
-                                </ul>
+                                <p className="text-[#fa0] font-bold mb-3">ACT II: THE HARVEST</p>
+                                <table className="w-full text-left mb-2">
+                                    <tbody>
+                                        <tr><td className="text-[#0af] pr-4 py-1 w-36">FORWARD</td><td>W</td></tr>
+                                        <tr><td className="text-[#0af] pr-4 py-1">REVERSE</td><td>S</td></tr>
+                                        <tr><td className="text-[#0af] pr-4 py-1">ROTATE LEFT</td><td>A</td></tr>
+                                        <tr><td className="text-[#0af] pr-4 py-1">ROTATE RIGHT</td><td>D</td></tr>
+                                        <tr><td className="text-[#0af] pr-4 py-1">FIRE</td><td>Space</td></tr>
+                                        <tr><td className="text-[#0af] pr-4 py-1">PAUSE</td><td>Escape</td></tr>
+                                    </tbody>
+                                </table>
+                                <p className="text-[#666] text-xs mt-2">Player 2: Arrow Keys + Numpad 0 (fire) &middot; Gamepad supported</p>
                             </div>
 
-                            <div className="mb-4">
-                                <p className="text-[#0af] font-bold mb-2">ACT III: THE BATTLE</p>
-                                <p>Vector combat in 3D space. (Coming soon)</p>
+                            <div className="mb-6 border-t border-[#333] pt-4">
+                                <p className="text-[#f00]">All acts share FUEL. Conserve it in Act I for bonus lives in Act II.</p>
                             </div>
 
-                            <p className="text-[#f00]">⚠ All acts share FUEL. Waste it in Act I, and you'll have fewer lives in Act II.</p>
                          </div>
-                         <div className="mt-8 text-center">
-                             <ArcadeButton variant="secondary" onClick={() => setAppState(AppState.MENU)}>CLOSE ARCHIVE</ArcadeButton>
+                         <div className="mt-4 text-center">
+                             <ArcadeButton variant="secondary" onClick={() => setAppState(AppState.MENU)}>BACK</ArcadeButton>
                          </div>
                     </div>
                 )}
