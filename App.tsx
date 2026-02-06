@@ -331,7 +331,7 @@ const App: React.FC = () => {
                                     Your mission is to descend to the surface, locate the ancient fuel depots, and establish a forward command base.<br/><br/>
                                     Fuel is scarce. Conserve it. It must last us through the harvest season.
                                 </p>
-                                <ArcadeButton onClick={() => setAppState(AppState.ACT_1_LANDER)}>INITIATE DESCENT</ArcadeButton>
+                                <ArcadeButton onClick={() => { audioService.playMusic('act1'); setAppState(AppState.ACT_1_LANDER); }}>INITIATE DESCENT</ArcadeButton>
                             </div>
                         )}
 
@@ -346,7 +346,7 @@ const App: React.FC = () => {
                                     They are moving toward our fuel reserves.<br/><br/>
                                     <span className="text-[#0f0]">ALL HANDS: DEFENSIVE POSITIONS</span>
                                 </p>
-                                <ArcadeButton onClick={() => setAppState(AppState.ACT_2_HARVEST)}>DEFEND THE HARVEST</ArcadeButton>
+                                <ArcadeButton onClick={() => { audioService.playMusic('act2'); setAppState(AppState.ACT_2_HARVEST); }}>DEFEND THE HARVEST</ArcadeButton>
                             </div>
                         )}
                     </>
