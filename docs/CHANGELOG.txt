@@ -1,0 +1,236 @@
+THE HARVEST - VERSION CHANGELOG
+================================
+
+V30 - LUNAR LANDER + RIP OFF (FULL CAMPAIGN)
+---------------------------------------------
+Major Update: Three-Act Structure Implemented
+
+NEW: ACT I - LUNAR LANDER (Chapters 1-2)
+-----------------------------------------
+Game Structure:
+- Full Campaign Mode: Lunar Lander → Rip Off (narrative arc)
+- Quick Start Mode: Jump directly to Rip Off (arcade mode)
+- Fuel and score carry over from Lunar Lander to Rip Off
+- Remaining fuel determines starting lives in Rip Off (0-4 bonus)
+
+Physics Engine - dt-Based (Frame-Rate Independent):
+- Delta-time integration: stable across all frame rates
+- Gravity: 0.576 px/s² (Ch1), 0.864 px/s² (Ch2) - 20% reduced from original
+- All values in consistent units (pixels/sec, radians/sec)
+- Smooth 60fps on modern hardware, stable on slower systems
+
+Momentum-Driven Controls:
+- Angular momentum: rotation has inertia + damping
+- Angular acceleration: 8.0 rad/s² (0.2-0.4s spin-up time)
+- Ramping throttle: smooth [0..1] throttle response
+- Thrust scales with throttle (not binary on/off)
+- Fuel consumption scales with throttle intensity
+- Thrust flame length/brightness scales with throttle
+- Thrust sound frequency increases with throttle
+
+Side-Scrolling Camera:
+- World coordinates: terrain/pads in world space
+- Dead zone: 200px from screen center (no micro-scrolling)
+- Camera only moves when lander exceeds threshold
+- Smooth following: ship stays generally centered
+- Parallax starfield for depth perception
+- No horizontal wrap (removed)
+
+Procedural Terrain Generation:
+- Chunk-based: 20 segments per chunk, extends as you fly
+- Seeded RNG: reproducible terrain per chapter
+- Goal distance: 8+ screens to extraction point
+- Geometric hints: flat sections, regular patterns (foreshadowing)
+- Terrain culling: only renders visible segments
+
+Vertical Terrain Structures (Classic Lunar Lander):
+- Tall vertical mountains: 200-400px cliff faces (15% chance)
+- Deep narrow valleys: 150-300px drops (10% chance)
+- Plateaus with geometric patterns (10% chance)
+- Normal terrain variation (65% chance)
+- Landing pads placed on:
+  • Flat valley floors
+  • Carved cliff shelves
+  • Narrow plateau tops
+- Full vertical range: 15-95% of screen height
+- No overhangs (terrain remains function of X)
+- Vertical control as important as horizontal travel
+
+Dynamic Camera Zoom (Precision Enhancement):
+- Base zoom: 1.0 (normal view)
+- Close zoom: 1.8 (precision view)
+- Zoom triggers (cumulative):
+  • Altitude < 150px: smooth zoom based on proximity
+  • Near steep walls (>100px height): zoom factor 0.6
+  • Near landing pads (<250px): zoom factor 0.8
+- Smooth interpolation: exponential smoothing (rate: 3.0)
+- Zoom scales around ship position (no camera jump)
+- Physics unchanged: zoom affects rendering only
+- Benefits:
+  • Improved precision during landing
+  • Better visibility in tight canyons
+  • Fairer collision detection feel
+  • Classic Lunar Lander authenticity
+
+Landing Pads & Fuel Collection:
+- Safe landing pads every ~1.5 screens
+- Fuel pads every ~3 screens (ensures feasible run)
+- Landing safety checks: velocity + angle requirements
+  • Vertical velocity limit: 120 px/s (Ch1), reduced in Ch2
+  • Horizontal velocity limit: 90 px/s (Ch1)
+  • Angle tolerance: 0.3 radians from upright
+- Fuel collection: +30% per fuel pad (up to 100% max)
+- Visual distinction:
+  • Regular pads: cyan markers, "SAFE" label
+  • Fuel pads: blinking cyan beacons, "FUEL" label
+  • Extraction pad: blinking orange beacon, "EXTRACTION" label
+- Collected pads turn gray (no re-collection)
+
+Extraction Point (Level End):
+- Distinct final landing zone at goal distance
+- Blinking orange beacon for visibility
+- Score bonus: 2000 base + 20×fuel remaining
+- Successful landing advances to next chapter/cutscene
+
+Lunar Lander HUD:
+- Fuel gauge: visual bar + percentage (color warnings at 40%/20%)
+- Altitude: distance to terrain directly below
+- Vertical velocity: with color-coded warnings
+- Horizontal velocity: with color-coded warnings
+- Score accumulator
+- Chapter indicator
+
+Navigation Beacon:
+- Orange arrow indicator (top-right corner)
+- Distance to extraction point in meters
+- Always visible during flight
+- Updates in real-time
+
+Narrative Cutscenes:
+- Intro: Mission briefing (before Ch1)
+- Post-Ch1: Surface observations, unusual geometry
+- Post-Ch2: Discovery of the swarm (transition to Rip Off)
+- Press any key to continue
+- Lem-style contemplative tone
+
+Visual & Audio:
+- Thrust particles scale with throttle intensity
+- Particle physics: dt-based with gravity
+- Floating "+30 FUEL" popup on collection
+- Landing feedback: success tones or crash explosion
+- Screen shake on crash (intensity: 20)
+- Parallax starfield scrolls with camera
+- Chapter-specific settings (gravity, goal distance)
+
+Technical Implementation:
+- Single-file architecture maintained (1795 lines)
+- Scene manager: MENU → CUTSCENE → LUNAR_LANDER → RIP_OFF
+- FloatingText class supports world/screen coords
+- Terrain extends procedurally (no pre-generation)
+- Camera dead-zone prevents jitter
+- Consistent vector graphics style
+
+Controls:
+- Thrust: Up Arrow / W / Space (hold for continuous)
+- Rotate: Left/Right Arrows or A/D
+- Gamepad: full support with analog stick
+- Same control config system as Rip Off
+
+ACT II - RIP OFF (Chapters 3+)
+-------------------------------
+- Existing Rip Off game unchanged
+- Receives fuel bonus from Lunar Lander performance
+- Score continues from LL chapters
+- All V26-V29 features preserved
+
+
+V29 - RESUME COUNTDOWN
+----------------------
+New Features:
+- 3-second countdown timer when resuming from pause
+- Displays large "3", "2", "1", "GO!" on screen
+- Audio beep on each countdown number
+- Higher pitch beep on "GO!"
+
+Benefits:
+- Gives player time to get hands on keyboard/controller
+- Prevents unfair deaths from immediate resume
+- Countdown cannot be interrupted (ESC disabled during countdown)
+
+
+V28 - CURSOR HIDING
+-------------------
+New Features:
+- Mouse cursor automatically hides during active gameplay
+- Provides cleaner, more immersive game experience
+
+Cursor Visibility:
+- HIDDEN: During active gameplay
+- VISIBLE: Start menu, pause screen, game over, name entry,
+  high scores, controls config, archives screen
+
+
+V27 - HIGH SCORES LIST
+----------------------
+New Features:
+- Persistent high score leaderboard (top 10 scores)
+- Name entry screen appears when achieving a qualifying score
+- Player name input: up to 8 characters, uppercase
+- Press Enter or click SUBMIT to save score
+- Default name "AAA" if left blank
+
+Menu Additions:
+- HIGH SCORES button on main menu (golden color)
+- View complete leaderboard anytime from main menu
+- New score highlighted in gold when viewing after submission
+
+Technical:
+- High scores saved to browser localStorage
+- Persists between sessions and browser restarts
+- Scores sorted by highest first
+
+
+V26 - ADAPTIVE WARFARE (Base Version)
+-------------------------------------
+Core Gameplay:
+- Wave-based space shooter with endless progression
+- Defend fuel cells from alien swarm
+- 1 or 2 player local co-op support
+- Screen wrapping (fly off one edge, appear on the other)
+
+Player Controls:
+- Player 1: WASD + Space (or mouse click to fire)
+- Player 2: Arrow keys + Numpad 0
+- Configurable keyboard controls via CONTROLS menu
+- Gamepad support with rebindable buttons
+- ESC to pause during gameplay
+
+Enemy Types:
+- Harvester (Red Tank): Slow, unarmed, steals fuel and drags it off-screen
+- Sprinter (Orange Tank): Fast, ARMED with projectiles, prioritize these
+- Exterminator (Purple Hunter): Rams your ship directly as a kinetic missile
+
+Adaptive AI System:
+- Detects "kiting" behavior (retreating while shooting)
+- When kiting detected, enemies adapt with flanking tactics next wave
+- "SWARM ADAPTING..." warning displayed when AI adjusts strategy
+
+Power-ups & Scoring:
+- Shield Module (Cyan Diamond): 15 seconds invulnerability
+- While shielded: RAM enemies to destroy them, PUSH fuel cells
+- 10% chance to drop from destroyed enemies
+- Score points: Harvester=100, Sprinter=150, Exterminator=250
+- Extra life every 5000 points
+
+Visual & Audio:
+- Procedural audio using Web Audio API (no external files)
+- Screen shake on explosions and player death
+- Particle effects for thrust and explosions
+- Floating score popups when destroying enemies
+- Parallax grid background
+- Attract mode demo on main menu
+
+UI Features:
+- Bottom status bar: Score, Wave, Fuel count, Ship lives
+- ARCHIVES button: Story lore and enemy tactical analysis
+- Pause menu with Resume/Quit options

@@ -1,0 +1,1920 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>The Harvest V30 - Lunar Lander + Rip Off</title>
+    <style>
+        body { margin: 0; background: #000; overflow: hidden; font-family: 'Courier New', monospace; user-select: none; color: #0f0; }
+        body.playing { cursor: none; }
+        canvas { display: block; margin: 0 auto; background: #000; }
+
+        /* --- UI STYLING --- */
+        .overlay-screen {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0,0,0,0.85); backdrop-filter: blur(4px);
+            display: flex; flex-direction: column; justify-content: center; align-items: center;
+            z-index: 999; display: none;
+        }
+
+        #start-screen { background: rgba(0,0,0,0.4); }
+
+        h1 { margin: 0 0 10px 0; font-size: 90px; text-shadow: 0 0 20px #0f0; letter-spacing: 8px; color: #0f0; text-transform: uppercase; }
+        h2 { margin: 0 0 20px 0; font-size: 40px; text-shadow: 0 0 15px #0f0; color: #fff; }
+        h3 { margin: 20px 0 10px 0; color: #0af; border-bottom: 1px solid #0af; width: 100%; }
+
+        .story-text {
+            max-width: 700px; text-align: left; line-height: 1.4; color: #ccc; font-size: 16px;
+            max-height: 60vh; overflow-y: auto; padding-right: 20px;
+            border-left: 2px solid #333; padding-left: 20px;
+        }
+        .story-text::-webkit-scrollbar { width: 5px; }
+        .story-text::-webkit-scrollbar-thumb { background: #444; }
+
+        .btn-container { display: flex; gap: 20px; margin-top: 30px; pointer-events: auto; }
+
+        .arcade-btn {
+            border: 2px solid #0f0; padding: 12px 24px; font-family: 'Courier New', monospace; font-size: 20px; font-weight: bold;
+            color: #0f0; background: rgba(0,0,0,0.9); cursor: pointer; transition: all 0.2s; text-transform: uppercase;
+            box-shadow: 0 0 10px rgba(0, 255, 0, 0.2); min-width: 150px; text-align: center;
+        }
+        .arcade-btn:hover { background: #0f0; color: #000; box-shadow: 0 0 25px rgba(0, 255, 0, 0.6); transform: scale(1.05); }
+        .arcade-btn.secondary { border-color: #888; color: #888; }
+        .arcade-btn.secondary:hover { background: #888; color: #000; box-shadow: 0 0 20px rgba(255,255,255, 0.4); }
+
+        .controls-hint { color: #888; margin-top: 30px; font-size: 14px; text-align: center; line-height: 1.5em; }
+        .p1-c { color: #0f0; } .p2-c { color: #0af; }
+
+        /* CONFIG MENU */
+        .config-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 40px; background: #111; padding: 30px; border: 1px solid #333; }
+        .input-row { display: flex; justify-content: space-between; margin-bottom: 10px; align-items: center; }
+        .key-display {
+            border: 1px solid #555; padding: 5px 10px; color: #fff; min-width: 80px; text-align: center;
+            cursor: pointer; background: #222; transition: background 0.2s;
+        }
+        .key-display:hover { background: #444; border-color: #fff; }
+        .key-display.binding { background: #f00; color: #fff; border-color: #f00; animation: pulse 0.5s infinite; }
+
+        @keyframes pulse { 0% { opacity: 1; } 50% { opacity: 0.5; } 100% { opacity: 1; } }
+
+        /* BOTTOM BAR */
+        #bottom-bar {
+            position: absolute; bottom: 0; left: 0; width: 100%; height: 45px;
+            background-color: #000; border-top: 2px solid #444;
+            display: flex; align-items: center; justify-content: space-between;
+            padding: 0 30px; box-sizing: border-box; z-index: 100;
+        }
+        .stat-group { font-size: 20px; font-weight: bold; display: flex; align-items: center; }
+        .stat-label { color: #6688ff; margin-right: 10px; }
+        #life-canvas { background: #000; margin-left: 20px; }
+        .wave-announce { position: absolute; top: 30%; width: 100%; text-align: center; font-size: 60px; color: #fff; text-shadow: 0 0 20px #0af; opacity: 0; pointer-events: none; transition: opacity 0.5s; }
+        #wave-sub { font-size: 24px; color: #f04; margin-top: 10px; display: block; text-shadow: 0 0 10px #f00; }
+        .high-score { color: #fd0; text-shadow: 0 0 10px #fd0; }
+        .new-high-score { color: #fd0; font-size: 28px; margin-bottom: 10px; animation: glow 1s infinite; }
+        @keyframes glow { 0%, 100% { text-shadow: 0 0 10px #fd0; } 50% { text-shadow: 0 0 25px #fd0, 0 0 35px #fa0; } }
+
+        /* HIGH SCORES TABLE */
+        .scores-table { border-collapse: collapse; margin: 20px 0; }
+        .scores-table th, .scores-table td { padding: 8px 20px; text-align: left; }
+        .scores-table th { color: #0af; border-bottom: 2px solid #0af; }
+        .scores-table td { color: #ccc; border-bottom: 1px solid #333; }
+        .scores-table tr.highlight td { color: #fd0; text-shadow: 0 0 10px #fd0; }
+        .scores-table .rank { color: #888; width: 40px; }
+        .scores-table .name { color: #0f0; min-width: 150px; }
+        .scores-table .score-val { color: #fff; text-align: right; min-width: 100px; }
+
+        /* NAME ENTRY */
+        .name-input {
+            background: #111; border: 2px solid #fd0; color: #fd0; font-family: 'Courier New', monospace;
+            font-size: 32px; padding: 10px 20px; text-align: center; text-transform: uppercase;
+            width: 200px; outline: none; letter-spacing: 4px;
+            -webkit-user-select: text; user-select: text; pointer-events: auto;
+        }
+        .name-input:focus { box-shadow: 0 0 20px rgba(255, 221, 0, 0.5); }
+        #name-entry-screen { pointer-events: auto; }
+
+        /* COUNTDOWN */
+        #countdown-display {
+            position: absolute; top: 40%; left: 50%; transform: translate(-50%, -50%);
+            font-size: 150px; font-weight: bold; color: #0f0; text-shadow: 0 0 40px #0f0;
+            z-index: 1000; pointer-events: none; opacity: 0; transition: opacity 0.2s;
+        }
+        #countdown-display.visible { opacity: 1; }
+
+        /* LUNAR LANDER HUD */
+        #ll-hud {
+            position: absolute; top: 20px; left: 20px; right: 20px;
+            display: none; pointer-events: none; z-index: 50;
+        }
+        #ll-hud.visible { display: flex; justify-content: space-between; }
+        .ll-gauge { background: rgba(0,0,0,0.7); padding: 10px 15px; border: 1px solid #0f0; }
+        .ll-gauge-label { font-size: 12px; color: #888; margin-bottom: 4px; }
+        .ll-gauge-value { font-size: 24px; color: #0f0; font-weight: bold; }
+        .ll-gauge-value.warning { color: #fa0; }
+        .ll-gauge-value.danger { color: #f00; animation: pulse 0.5s infinite; }
+        .ll-fuel-bar { width: 150px; height: 10px; background: #333; border: 1px solid #555; margin-top: 5px; }
+        .ll-fuel-fill { height: 100%; background: #0f0; transition: width 0.1s; }
+        .ll-fuel-fill.warning { background: #fa0; }
+        .ll-fuel-fill.danger { background: #f00; }
+        .ll-chapter-indicator { position: absolute; top: 20px; left: 50%; transform: translateX(-50%); color: #0af; font-size: 14px; }
+
+        /* CUTSCENE SCREEN */
+        #cutscene-screen {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0,0,0,0.95); display: none; flex-direction: column;
+            justify-content: center; align-items: center; z-index: 1000; padding: 40px;
+        }
+        #cutscene-screen.visible { display: flex; }
+        .cutscene-text {
+            max-width: 700px; text-align: left; line-height: 1.8; color: #ccc; font-size: 18px;
+            white-space: pre-wrap;
+        }
+        .cutscene-text .log-header { color: #0af; font-weight: bold; margin-bottom: 10px; }
+        .cutscene-text .emphasis { color: #fff; }
+        .cutscene-text .warning { color: #fa0; }
+        .cutscene-text .danger { color: #f00; }
+        .cutscene-continue { margin-top: 40px; color: #888; font-size: 14px; animation: pulse 1.5s infinite; }
+
+        /* LANDING RESULT OVERLAY */
+        #landing-result {
+            position: absolute; top: 40%; left: 50%; transform: translate(-50%, -50%);
+            text-align: center; display: none; z-index: 100;
+        }
+        #landing-result.visible { display: block; }
+        #landing-result h2 { font-size: 48px; margin-bottom: 20px; text-shadow: 0 0 20px currentColor; }
+        #landing-result .success { color: #0f0; }
+        #landing-result .failure { color: #f00; }
+        #landing-result .stats { color: #888; font-size: 16px; margin-top: 20px; }
+
+        /* CHAPTER SELECT (for testing/debug) */
+        .chapter-select { margin-top: 15px; }
+        .chapter-btn {
+            border: 1px solid #444; padding: 5px 10px; margin: 0 5px;
+            background: #111; color: #888; cursor: pointer; font-family: inherit;
+        }
+        .chapter-btn:hover { border-color: #0f0; color: #0f0; }
+        .chapter-btn.active { border-color: #0f0; color: #0f0; background: #020; }
+    </style>
+</head>
+<body>
+
+    <!-- START MENU -->
+    <div id="start-screen" class="overlay-screen" style="display: flex;">
+        <h1>THE HARVEST</h1>
+        <div class="high-score" style="font-size: 24px; margin-bottom: 20px;">HIGH SCORE: <span id="menu-high-score">0</span></div>
+
+        <div style="margin-bottom: 15px; color: #888; font-size: 14px;">FULL CAMPAIGN (Act I + II)</div>
+        <div class="btn-container">
+            <div class="arcade-btn" onclick="startGameWithChapters(1)">1 PLAYER</div>
+            <div class="arcade-btn" style="border-color: #0af; color: #0af;" onclick="startGameWithChapters(2)">2 PLAYERS</div>
+        </div>
+
+        <div style="margin-top: 20px; margin-bottom: 10px; color: #666; font-size: 12px;">QUICK START (Rip Off Only)</div>
+        <div class="btn-container">
+            <div class="arcade-btn secondary" style="padding: 8px 16px; font-size: 14px;" onclick="startGame(1)">1P ARCADE</div>
+            <div class="arcade-btn secondary" style="padding: 8px 16px; font-size: 14px; border-color: #0af; color: #0af;" onclick="startGame(2)">2P ARCADE</div>
+        </div>
+
+        <div class="controls-hint">
+            <span class="p1-c">P1: WASD + SPACE (or MOUSE CLICK)</span><br>
+            <span class="p2-c">P2: ARROWS + 0 (Numpad)</span>
+        </div>
+
+        <div class="btn-container" style="margin-top: 15px;">
+            <div class="arcade-btn secondary" onclick="showHelp()">ARCHIVES</div>
+            <div class="arcade-btn secondary" onclick="showConfig()">CONTROLS</div>
+            <div class="arcade-btn secondary" style="border-color: #fd0; color: #fd0;" onclick="showHighScores()">HIGH SCORES</div>
+        </div>
+        <div style="margin-top: 20px; font-size: 12px; color: #666;">V30.0 - LUNAR LANDER + RIP OFF</div>
+    </div>
+
+    <!-- CONFIG MENU -->
+    <div id="config-screen" class="overlay-screen">
+        <h2>CONTROL CONFIG</h2>
+        <p style="margin-bottom: 20px;">Click a button below, then press a Key or Gamepad Button.</p>
+        <div class="config-grid">
+            <div>
+                <h3 style="color:#0f0">PLAYER 1</h3>
+                <div class="input-row"><span>THRUST</span><div id="btn-p1-up" class="key-display" onclick="bind('p1','up')">W</div></div>
+                <div class="input-row"><span>LEFT</span><div id="btn-p1-left" class="key-display" onclick="bind('p1','left')">A</div></div>
+                <div class="input-row"><span>RIGHT</span><div id="btn-p1-right" class="key-display" onclick="bind('p1','right')">D</div></div>
+                <div class="input-row"><span>FIRE</span><div id="btn-p1-fire" class="key-display" onclick="bind('p1','fire')">SPACE</div></div>
+            </div>
+            <div>
+                <h3 style="color:#0af">PLAYER 2</h3>
+                <div class="input-row"><span>THRUST</span><div id="btn-p2-up" class="key-display" onclick="bind('p2','up')">UP</div></div>
+                <div class="input-row"><span>LEFT</span><div id="btn-p2-left" class="key-display" onclick="bind('p2','left')">LEFT</div></div>
+                <div class="input-row"><span>RIGHT</span><div id="btn-p2-right" class="key-display" onclick="bind('p2','right')">RIGHT</div></div>
+                <div class="input-row"><span>FIRE</span><div id="btn-p2-fire" class="key-display" onclick="bind('p2','fire')">0</div></div>
+            </div>
+        </div>
+        <div class="arcade-btn secondary" style="margin-top: 30px;" onclick="hideOverlays()">BACK</div>
+    </div>
+
+    <!-- HELP SCREEN -->
+    <div id="help-screen" class="overlay-screen">
+        <h2>MISSION BRIEFING</h2>
+        <div class="story-text">
+            <p style="color:#0af; border-bottom: 1px solid #0af; padding-bottom: 10px; margin-bottom: 15px;"><strong>ACT I: LUNAR LANDER</strong></p>
+            <p>Chapters 1-2: Navigate the landing craft to the planet surface. Conserve fuel for the ground operations ahead.</p>
+            <ul style="list-style: none; padding: 0; margin-bottom: 20px;">
+                <li style="margin-bottom: 10px;"><strong style="color:#0f0">THRUST:</strong> Up Arrow / W / Space - Fire engines (consumes fuel)</li>
+                <li style="margin-bottom: 10px;"><strong style="color:#0f0">ROTATE:</strong> Left/Right Arrows or A/D</li>
+                <li style="margin-bottom: 10px;"><strong style="color:#fa0">LANDING:</strong> Land on marked platforms. Slower = safer. Higher multiplier = more points.</li>
+                <li><strong style="color:#f00">WARNING:</strong> Fuel remaining affects Act II starting resources!</li>
+            </ul>
+
+            <p style="color:#0af; border-bottom: 1px solid #0af; padding-bottom: 10px; margin-bottom: 15px;"><strong>ACT II: THE HARVEST</strong></p>
+            <p>Chapters 3+: Defend fuel reserves from the mechanical swarm.</p>
+            <ul style="list-style: none; padding: 0;">
+                <li style="margin-bottom: 15px;"><strong style="color:#f04">THE HARVESTER (Red Tank)</strong><br>Slow. Shielded. Unarmed. Drags Fuel into the void.</li>
+                <li style="margin-bottom: 15px;"><strong style="color:#fa0">THE SPRINTER (Orange Tank)</strong><br>High velocity. <strong style="color:#fa0">ARMED.</strong> Prioritize these.</li>
+                <li style="margin-bottom: 15px;"><strong style="color:#b0f">THE EXTERMINATOR (Purple Hunter)</strong><br>Logic flipped. Acts as a Kinetic Missile. <strong>RAMS</strong> your ship.</li>
+                <li><strong style="color:#0ff">SHIELD MODULE (Cyan Diamond)</strong><br>Provides 15s invulnerability. <span style="color:#0f0">RAM</span> enemies or <span style="color:#0f0">PUSH</span> fuel.</li>
+            </ul>
+        </div>
+        <div class="arcade-btn secondary" style="margin-top: 30px;" onclick="hideOverlays()">CLOSE ARCHIVE</div>
+    </div>
+
+    <!-- HIGH SCORES SCREEN -->
+    <div id="highscores-screen" class="overlay-screen">
+        <h2 style="color:#fd0">HIGH SCORES</h2>
+        <table class="scores-table" id="scores-table">
+            <thead><tr><th class="rank">#</th><th class="name">NAME</th><th class="score-val">SCORE</th></tr></thead>
+            <tbody id="scores-body"></tbody>
+        </table>
+        <div class="arcade-btn secondary" style="margin-top: 20px;" onclick="hideHighScores()">BACK</div>
+    </div>
+
+    <!-- NAME ENTRY SCREEN -->
+    <div id="name-entry-screen" class="overlay-screen">
+        <h2 style="color:#fd0">NEW HIGH SCORE!</h2>
+        <p style="color:#fff; font-size:32px; margin-bottom:20px;">SCORE: <span id="entry-score">0</span></p>
+        <p style="color:#888; margin-bottom:10px;">ENTER YOUR NAME</p>
+        <input type="text" id="name-input" class="name-input" maxlength="8" placeholder="AAA" autocomplete="off">
+        <div class="arcade-btn" style="margin-top: 30px;" onclick="submitHighScore()">SUBMIT</div>
+    </div>
+
+    <!-- GAME OVER -->
+    <div id="game-over-screen" class="overlay-screen">
+        <h2 style="color:#f00">GAME OVER</h2>
+        <p id="game-over-score" style="color:#fff; font-size:28px; margin-bottom:5px;">SCORE: 0</p>
+        <p id="game-over-reason" style="color:#888; margin-bottom:20px; font-size:18px;">ALL SHIPS DESTROYED</p>
+        <div class="btn-container">
+            <div class="arcade-btn" onclick="resetGame()">TRY AGAIN</div>
+            <div class="arcade-btn secondary" onclick="quitGame()">MAIN MENU</div>
+        </div>
+    </div>
+
+    <!-- PAUSE -->
+    <div id="pause-screen" class="overlay-screen">
+        <h2>PAUSED</h2>
+        <div class="btn-container">
+            <div class="arcade-btn" onclick="togglePause()">RESUME</div>
+            <div class="arcade-btn secondary" onclick="quitGame()">QUIT</div>
+        </div>
+    </div>
+
+    <div id="wave-display" class="wave-announce">
+        WAVE <span id="wave-num-disp">1</span>
+        <span id="wave-sub"></span>
+    </div>
+
+    <div id="countdown-display">3</div>
+
+    <!-- LUNAR LANDER HUD -->
+    <div id="ll-hud">
+        <div class="ll-chapter-indicator">CHAPTER <span id="ll-chapter-num">1</span>: <span id="ll-chapter-name">ORBITAL APPROACH</span></div>
+        <div class="ll-gauge">
+            <div class="ll-gauge-label">FUEL</div>
+            <div class="ll-gauge-value" id="ll-fuel-value">100%</div>
+            <div class="ll-fuel-bar"><div class="ll-fuel-fill" id="ll-fuel-fill"></div></div>
+        </div>
+        <div class="ll-gauge">
+            <div class="ll-gauge-label">ALTITUDE</div>
+            <div class="ll-gauge-value" id="ll-altitude">1000</div>
+        </div>
+        <div class="ll-gauge">
+            <div class="ll-gauge-label">VERT VEL</div>
+            <div class="ll-gauge-value" id="ll-vert-vel">0</div>
+        </div>
+        <div class="ll-gauge">
+            <div class="ll-gauge-label">HORZ VEL</div>
+            <div class="ll-gauge-value" id="ll-horz-vel">0</div>
+        </div>
+        <div class="ll-gauge">
+            <div class="ll-gauge-label">SCORE</div>
+            <div class="ll-gauge-value" id="ll-score">0</div>
+        </div>
+    </div>
+
+    <!-- CUTSCENE SCREEN -->
+    <div id="cutscene-screen">
+        <div class="cutscene-text" id="cutscene-content"></div>
+        <div class="cutscene-continue">PRESS ANY KEY TO CONTINUE</div>
+    </div>
+
+    <!-- LANDING RESULT -->
+    <div id="landing-result">
+        <h2 id="landing-result-title" class="success">PERFECT LANDING</h2>
+        <div class="stats" id="landing-stats"></div>
+    </div>
+
+    <div id="bottom-bar">
+        <div style="display:flex; gap:40px;">
+            <div class="stat-group"><span class="stat-label">Score:</span><span id="ui-score" class="stat-value">0</span></div>
+            <div class="stat-group"><span class="stat-label" style="color:#fd0;">Best:</span><span id="ui-high-score" class="stat-value" style="color:#fd0;">0</span></div>
+            <div class="stat-group"><span class="stat-label">Wave:</span><span id="ui-wave" class="stat-value">1</span></div>
+            <div class="stat-group"><span class="stat-label">Fuel:</span><span id="ui-fuel" class="stat-value">8</span></div>
+        </div>
+        <div class="stat-group"><span class="stat-label">Ships:</span><canvas id="life-canvas" width="200" height="30"></canvas></div>
+    </div>
+
+    <canvas id="gameCanvas"></canvas>
+
+<script>
+// --- 1. INPUT SYSTEM ---
+const InputMap = { p1: { up: 'KeyW', left: 'KeyA', right: 'KeyD', fire: 'Space' }, p2: { up: 'ArrowUp', left: 'ArrowLeft', right: 'ArrowRight', fire: 'Numpad0' } };
+const GamepadMap = { p1: { thrust: 0, fire: 1 }, p2: { thrust: 0, fire: 1 } };
+const mouseState = { leftDown: false };
+window.addEventListener('mousedown', e => { if(e.button === 0) mouseState.leftDown = true; });
+window.addEventListener('mouseup', e => { if(e.button === 0) mouseState.leftDown = false; });
+
+let isBinding = false, bindTarget = { player: null, action: null };
+
+function showConfig() { document.getElementById('start-screen').style.display='none'; document.getElementById('config-screen').style.display='flex'; updateConfigUI(); }
+function showHelp() { document.getElementById('start-screen').style.display='none'; document.getElementById('help-screen').style.display='flex'; }
+function showHighScores() { document.getElementById('start-screen').style.display='none'; renderHighScores(); document.getElementById('highscores-screen').style.display='flex'; }
+function hideHighScores() { document.getElementById('highscores-screen').style.display='none'; document.getElementById('start-screen').style.display='flex'; }
+function hideOverlays() { document.getElementById('config-screen').style.display='none'; document.getElementById('help-screen').style.display='none'; document.getElementById('highscores-screen').style.display='none'; document.getElementById('start-screen').style.display='flex'; }
+
+function updateConfigUI() {
+    for(let p of ['p1','p2']) for(let act of ['up','left','right','fire']) {
+        let el=document.getElementById(`btn-${p}-${act}`), c=InputMap[p][act].replace(/Key|Digit|Arrow/g,'');
+        el.innerText=c.toUpperCase(); el.classList.remove('binding');
+    }
+}
+function bind(p,a) { if(isBinding)return; isBinding=true; bindTarget={player:p,action:a}; document.getElementById(`btn-${p}-${a}`).innerText="..."; document.getElementById(`btn-${p}-${a}`).classList.add('binding'); window.addEventListener('keydown',handleKeyBind); }
+function handleKeyBind(e) { e.preventDefault(); InputMap[bindTarget.player][bindTarget.action]=e.code; finishBind(); }
+function handleGamepadBind(i) { if(bindTarget.action==='up')GamepadMap[bindTarget.player].thrust=i; else if(bindTarget.action==='fire')GamepadMap[bindTarget.player].fire=i; finishBind(); }
+function finishBind() { window.removeEventListener('keydown',handleKeyBind); isBinding=false; updateConfigUI(); }
+
+// --- 2. AUDIO ---
+const AudioContext = window.AudioContext || window.webkitAudioContext;
+let audioCtx, masterGain;
+function initAudio() { if(!audioCtx){ audioCtx=new AudioContext(); masterGain=audioCtx.createGain(); masterGain.gain.value=0.3; masterGain.connect(audioCtx.destination); } if(audioCtx.state==='suspended')audioCtx.resume(); }
+const sfx = {
+    laser:()=>{ if(!audioCtx)return; const o=audioCtx.createOscillator(),g=audioCtx.createGain(); o.type='sawtooth'; o.frequency.setValueAtTime(800,audioCtx.currentTime); o.frequency.exponentialRampToValueAtTime(100,audioCtx.currentTime+0.15); g.gain.setValueAtTime(0.3,audioCtx.currentTime); g.gain.exponentialRampToValueAtTime(0.01,audioCtx.currentTime+0.15); o.connect(g); g.connect(masterGain); o.start(); o.stop(audioCtx.currentTime+0.2); },
+    enemyLaser:()=>{ if(!audioCtx)return; const o=audioCtx.createOscillator(),g=audioCtx.createGain(); o.type='square'; o.frequency.setValueAtTime(200,audioCtx.currentTime); o.frequency.linearRampToValueAtTime(100,audioCtx.currentTime+0.2); g.gain.setValueAtTime(0.2,audioCtx.currentTime); g.gain.exponentialRampToValueAtTime(0.01,audioCtx.currentTime+0.2); o.connect(g); g.connect(masterGain); o.start(); o.stop(audioCtx.currentTime+0.2); },
+    explosion:()=>{ if(!audioCtx)return; const b=audioCtx.createBuffer(1,22050,44100),d=b.getChannelData(0); for(let i=0;i<22050;i++)d[i]=Math.random()*2-1; const s=audioCtx.createBufferSource(),g=audioCtx.createGain(),f=audioCtx.createBiquadFilter(); f.type='lowpass'; f.frequency.value=800; g.gain.setValueAtTime(0.8,audioCtx.currentTime); g.gain.exponentialRampToValueAtTime(0.01,audioCtx.currentTime+0.5); s.buffer=b; s.connect(f); f.connect(g); g.connect(masterGain); s.start(); },
+    thrust:()=>{ if(!audioCtx)return; const o=audioCtx.createOscillator(),g=audioCtx.createGain(); o.type='square'; o.frequency.setValueAtTime(50,audioCtx.currentTime); g.gain.setValueAtTime(0.15,audioCtx.currentTime); g.gain.exponentialRampToValueAtTime(0.01,audioCtx.currentTime+0.1); o.connect(g); g.connect(masterGain); o.start(); o.stop(audioCtx.currentTime+0.1); },
+    playTone:(f,t,d)=>{ if(!audioCtx)return; const o=audioCtx.createOscillator(),g=audioCtx.createGain(); o.type=t; o.frequency.setValueAtTime(f,audioCtx.currentTime); g.gain.setValueAtTime(0.2,audioCtx.currentTime); g.gain.exponentialRampToValueAtTime(0.01,audioCtx.currentTime+d); o.connect(g); g.connect(masterGain); o.start(); o.stop(audioCtx.currentTime+d+0.1); },
+    oneUp:()=>{ sfx.playTone(440,'square',0.1); setTimeout(()=>sfx.playTone(880,'square',0.3),150); },
+    powerUp:()=>{ sfx.playTone(880,'sine',0.1); setTimeout(()=>sfx.playTone(1760,'sine',0.3),100); }
+};
+
+// --- 3. GAME CORE ---
+const canvas = document.getElementById("gameCanvas"), ctx = canvas.getContext("2d");
+const lifeCanvas = document.getElementById("life-canvas"), lifeCtx = lifeCanvas.getContext("2d");
+const BAR_HEIGHT = 45;
+let W = canvas.width = window.innerWidth, H = canvas.height = window.innerHeight - BAR_HEIGHT;
+window.addEventListener('resize', () => { W=canvas.width=window.innerWidth; H=canvas.height=window.innerHeight-BAR_HEIGHT; });
+
+const keys={}; const gamepadState={p1:{x:0,thrust:false,fire:false},p2:{x:0,thrust:false,fire:false}};
+window.addEventListener('keydown',e=>{ if(e.target.tagName==='INPUT')return; if(isBinding)return; keys[e.code]=true; if(e.code==='Escape' && !attractMode)togglePause(); });
+window.addEventListener('keyup',e=>{ if(e.target.tagName==='INPUT')return; keys[e.code]=false; });
+
+function pollGamepads(){
+    const gps=navigator.getGamepads(); if(!gps)return;
+    const map=(idx,t,p)=>{
+        if(gps[idx]){
+            if(isBinding && bindTarget.player===p) for(let i=0;i<gps[idx].buttons.length;i++) if(gps[idx].buttons[i].pressed){handleGamepadBind(i);return;}
+            t.x=Math.abs(gps[idx].axes[0])>0.2?gps[idx].axes[0]:0;
+            let tb=GamepadMap[p].thrust, fb=GamepadMap[p].fire;
+            t.thrust=gps[idx].buttons[tb].pressed||gps[idx].buttons[12].pressed; t.fire=gps[idx].buttons[fb].pressed;
+            if(gps[idx].buttons[9].pressed && !attractMode) { if(!t.pausePressed){togglePause();t.pausePressed=true;} } else t.pausePressed=false;
+        }
+    };
+    map(0,gamepadState.p1,'p1'); map(1,gamepadState.p2,'p2');
+}
+
+const FRICTION=0.98;
+const SHAPES = {
+    p1: [[15,0], [-10,10], [-5,0], [-10,-10]], p2: [[15,0], [-10,10], [-5,0], [-10,-10]],
+    tankBody: [[12,8],[12,-8],[-12,-8],[-12,8]], tankTreadL: [[14,12],[-14,12],[-14,8],[14,8]], tankTreadR: [[14,-12],[-14,-12],[-14,-8],[14,-8]], tankTurret: [[0,0],[20,0]],
+    hunterBody: [[15,0],[-5,12],[-5,-12]], hunterWing: [[-5,0],[-15,8],[-15,-8]],
+    fuel: [[-7,-12],[7,-12],[12,0],[7,12],[-7,12],[-12,0]], powerup: [[0,-10],[8,0],[0,10],[-8,0]]
+};
+const WAVE_CONFIG = [
+    [{basic:1},{basic:1},{basic:2},{basic:2}],
+    [{basic:2,hunter:1},{basic:2,hunter:1},{basic:3,hunter:1},{basic:3,hunter:1}],
+    [{basic:3,hunter:1},{basic:2,dash:1,hunter:1},{basic:3,dash:1,hunter:2},{basic:2,dash:2,hunter:2}]
+];
+
+let attractMode=true, activeGame=false, gamePaused=false, playerCount=1, score=0, lives=5, nextLifeScore=5000, wave=1, round=0;
+let highScores = JSON.parse(localStorage.getItem('harvestHighScores')) || [];
+let pendingScore = 0;
+let pendingReason = '';
+const MAX_HIGH_SCORES = 10;
+let waveQueue=[], roundDelayTimer=0, spawnTimer=0, screenShake=0;
+let kitingCounter = 0; // Tracks if player is retreating
+let tacticalMode = false; // If true, enemies flank
+let players=[], enemies=[], bullets=[], fuels=[], particles=[], powerups=[], popups=[];
+
+// --- BASE ENTITY CLASS (moved before LL code) ---
+class Entity { constructor(x,y,c){this.x=x;this.y=y;this.vx=0;this.vy=0;this.angle=-Math.PI/2;this.color=c;this.dead=false;this.shape=[];} update(){this.x+=this.vx;this.y+=this.vy;} drawShape(s){ctx.beginPath();for(let i=0;i<s.length;i++){let rx=s[i][0]*Math.cos(this.angle)-s[i][1]*Math.sin(this.angle),ry=s[i][0]*Math.sin(this.angle)+s[i][1]*Math.cos(this.angle);if(i===0)ctx.moveTo(this.x+rx,this.y+ry);else ctx.lineTo(this.x+rx,this.y+ry);}ctx.closePath();ctx.stroke();} draw(){ctx.strokeStyle=this.color;ctx.lineWidth=2;ctx.shadowBlur=10;ctx.shadowColor=this.color;if(this.shape.length>0)this.drawShape(this.shape);ctx.shadowBlur=0;} }
+
+// --- SCENE/CHAPTER MANAGEMENT ---
+const SCENE_TYPE = {
+    MENU: 'menu',
+    CUTSCENE: 'cutscene',
+    LUNAR_LANDER: 'lunar_lander',
+    RIP_OFF: 'rip_off'
+};
+
+let currentChapter = 0; // 0 = menu, 1 = LL orbital, 2 = LL descent, 3+ = Rip Off
+let currentScene = SCENE_TYPE.MENU;
+let llFuelRemaining = 100; // Fuel percentage that carries over
+let llScore = 0; // Score accumulated in LL chapters
+
+// Cutscene data
+const CUTSCENES = {
+    intro: {
+        text: `<span class="log-header">MISSION LOG - DAY 1</span>
+
+The colony ship <span class="emphasis">Meridian</span> has identified a resource-rich moon in the outer system.
+
+Initial scans show massive deposits of crystalline fuel compounds - enough to sustain the fleet for generations.
+
+<span class="warning">Atmospheric composition: Negligible</span>
+<span class="warning">Life signs: None detected</span>
+<span class="emphasis">Surface composition: Silicate, crystalline structures, metallic deposits</span>
+
+The landing team has been deployed. Lieutenant Chen will conduct the orbital approach and select the primary landing zone.
+
+This is a routine resource extraction mission.
+
+<span class="emphasis">Nothing more.</span>`,
+        nextChapter: 1
+    },
+    afterChapter1: {
+        text: `<span class="log-header">MISSION LOG - DAY 1, 14:32 HOURS</span>
+
+Orbital survey complete. Primary landing zone selected in sector 7-G.
+
+Chen's report notes some <span class="warning">unusual surface geometry</span> - regular patterns that don't match standard geological formations. Engineering dismisses it as crystalline growth structures.
+
+The fuel deposits are even richer than initial scans suggested. Command is pleased.
+
+<span class="emphasis">Beginning final descent sequence.</span>
+
+Switching to precision landing mode. Fuel conservation critical - we'll need reserves for the extraction equipment.`,
+        nextChapter: 2
+    },
+    afterChapter2: {
+        text: `<span class="log-header">MISSION LOG - DAY 1, 19:47 HOURS</span>
+
+Landing successful. The surface is... <span class="warning">strange</span>.
+
+What we thought were mineral formations are something else entirely. The crystalline structures pulse with faint light - some kind of piezoelectric reaction, Engineering says.
+
+The fuel pods are being deployed in a defensive perimeter.
+
+<span class="danger">ALERT: Movement detected on the surface.</span>
+
+Metallic objects emerging from subsurface structures. Initial assessment: <span class="emphasis">autonomous collection units</span>. Ancient. Perhaps dormant for millennia.
+
+They're moving toward our fuel reserves.
+
+<span class="danger">ALL HANDS: DEFENSIVE POSITIONS</span>`,
+        nextChapter: 3
+    }
+};
+
+// --- LUNAR LANDER STATE ---
+let lander = null;
+let terrain = [];
+let landingZones = [];
+let llParticles = [];
+let llCameraX = 0;
+let llCameraScale = 1.0; // Dynamic zoom
+let llLastTime = 0;
+let llGeneratedXMax = 0;
+let llRNG = 0; // Simple seeded RNG state
+
+// Physics constants (dt-based, in pixels/sec and rad/sec)
+const LL_GRAVITY_CH1 = 0.012 * 60 * 0.8; // Convert from per-frame, reduce 20%
+const LL_GRAVITY_CH2 = 0.018 * 60 * 0.8;
+const LL_THRUST = 0.04 * 60 * 2.5; // pixels/sec^2 (increased for horizontal travel)
+const LL_ROT_ACCEL = 8.0; // rad/sec^2
+const LL_ROT_DAMP = 0.92; // per-second damping factor
+const LL_THROTTLE_RAMP = 8.0; // throttle ramp rate
+const LL_FUEL_RATE = 6.0; // fuel % per second at full throttle (reduced from 10)
+const LL_MAX_FUEL = 100;
+const LL_FUEL_PICKUP = 45; // fuel gained from fuel pad (increased from 30)
+const LL_MAX_VX = 200; // pixels/sec horizontal velocity cap
+const LL_MAX_VY = 250; // pixels/sec vertical velocity cap
+const LL_SPACE_DRAG = 0.998; // Very light drag per second
+const LL_CAMERA_DEADZONE = 200; // pixels from center before camera moves
+const LL_TERRAIN_SEGMENT_WIDTH = 80;
+const LL_TERRAIN_CHUNK_SIZE = 20; // segments per chunk
+const LL_GOAL_SCREENS = 8; // how many screens to the extraction point
+
+// Camera zoom constants
+const LL_BASE_ZOOM = 1.0;
+const LL_CLOSE_ZOOM = 1.8;
+const LL_ZOOM_RATE = 3.0; // Interpolation speed
+const LL_ZOOM_ALTITUDE_THRESHOLD = 150; // Zoom in when below this altitude
+const LL_ZOOM_PAD_RADIUS = 250; // Zoom in when near a pad
+
+let llState = {
+    chapter: 1,
+    fuel: 100,
+    gravity: LL_GRAVITY_CH1,
+    goalX: W * LL_GOAL_SCREENS,
+    safeLandingVelV: 120, // pixels/sec (was 2.0 per-frame * 60)
+    safeLandingVelH: 90,  // pixels/sec
+    safeLandingAngle: 0.3, // radians
+    gameOver: false,
+    landed: false,
+    crashed: false,
+    resultTimer: 0,
+    onFuelPad: false,
+    fuelCollected: false
+};
+
+// --- LUNAR LANDER TERRAIN GENERATION (Procedural Chunks) ---
+function simpleRandom() {
+    // Simple seeded LCG
+    llRNG = (llRNG * 1103515245 + 12345) & 0x7fffffff;
+    return llRNG / 0x7fffffff;
+}
+
+function generateTerrainChunk(startX, segmentCount) {
+    const baseHeight = H * 0.75;
+    let lastY = terrain.length > 0 ? terrain[terrain.length - 1].y : baseHeight;
+
+    for (let i = 0; i < segmentCount; i++) {
+        let x = startX + i * LL_TERRAIN_SEGMENT_WIDTH;
+        let y;
+
+        // Decide on feature type
+        let roll = simpleRandom();
+
+        if (roll < 0.15 && i > 2) {
+            // Tall vertical mountain/cliff (15% chance)
+            let cliffHeight = 200 + simpleRandom() * 200; // 200-400px tall
+            let direction = simpleRandom() < 0.5 ? -1 : 1; // Up or down cliff
+
+            if (direction < 0) {
+                // Cliff going up (valley to plateau)
+                y = Math.max(H * 0.2, lastY - cliffHeight);
+            } else {
+                // Cliff going down (plateau to valley)
+                y = Math.min(H * 0.9, lastY + cliffHeight);
+            }
+        } else if (roll < 0.25 && i > 1) {
+            // Deep narrow valley (10% chance)
+            let valleyDepth = 150 + simpleRandom() * 150; // 150-300px deep
+            y = Math.min(H * 0.9, lastY + valleyDepth);
+        } else if (roll < 0.35) {
+            // Plateau (flat section with geometric pattern)
+            y = lastY;
+            // Snap to regular grid for geometric hint
+            if (simpleRandom() < 0.3) {
+                y = Math.round(y / 30) * 30;
+            }
+        } else {
+            // Normal variation (65% chance)
+            let variation = 60 + simpleRandom() * 40; // 60-100px
+            y = lastY + (simpleRandom() - 0.5) * variation;
+        }
+
+        // Keep within screen bounds (allow full vertical range)
+        y = Math.max(H * 0.15, Math.min(H * 0.95, y));
+
+        terrain.push({ x, y });
+        lastY = y;
+    }
+}
+
+function placeLandingPad(worldX, isFuelPad = false, isExtraction = false) {
+    const zoneWidth = 100;
+    const baseHeight = H * 0.75;
+
+    // Find terrain height at this position
+    let zoneY = baseHeight;
+    for (let i = 0; i < terrain.length - 1; i++) {
+        if (terrain[i].x <= worldX && terrain[i + 1].x >= worldX) {
+            let t = (worldX - terrain[i].x) / (terrain[i + 1].x - terrain[i].x);
+            zoneY = terrain[i].y + t * (terrain[i + 1].y - terrain[i].y);
+            break;
+        }
+    }
+
+    // Flatten terrain at pad
+    for (let i = 0; i < terrain.length; i++) {
+        if (terrain[i].x >= worldX - zoneWidth/2 && terrain[i].x <= worldX + zoneWidth/2) {
+            terrain[i].y = zoneY;
+        }
+    }
+
+    landingZones.push({
+        x: worldX,
+        y: zoneY,
+        width: zoneWidth,
+        isFuelPad: isFuelPad,
+        isExtraction: isExtraction,
+        fuelCollected: false,
+        multiplier: isFuelPad ? 1.5 : (isExtraction ? 3 : 1),
+        label: isExtraction ? 'EXTRACTION' : (isFuelPad ? 'FUEL' : 'SAFE')
+    });
+}
+
+function initTerrain(chapter) {
+    terrain = [];
+    landingZones = [];
+    llGeneratedXMax = 0;
+    llRNG = chapter * 12345; // Seed based on chapter
+
+    // Generate initial chunks
+    const initialChunks = 6;
+    for (let c = 0; c < initialChunks; c++) {
+        generateTerrainChunk(llGeneratedXMax, LL_TERRAIN_CHUNK_SIZE);
+        llGeneratedXMax += LL_TERRAIN_CHUNK_SIZE * LL_TERRAIN_SEGMENT_WIDTH;
+    }
+
+    // Place landing pads strategically
+    const padInterval = W * 1.5; // Every 1.5 screens
+    const fuelInterval = W * 3; // Fuel every 3 screens
+
+    for (let x = W; x < llState.goalX; x += padInterval) {
+        let isFuel = (x % fuelInterval) === 0;
+        placeLandingPad(x, isFuel, false);
+    }
+
+    // Place extraction point at goal
+    placeLandingPad(llState.goalX, false, true);
+}
+
+function extendTerrain() {
+    // Generate more terrain as camera approaches the end
+    if (llCameraX + W * 2 > llGeneratedXMax) {
+        generateTerrainChunk(llGeneratedXMax, LL_TERRAIN_CHUNK_SIZE);
+        llGeneratedXMax += LL_TERRAIN_CHUNK_SIZE * LL_TERRAIN_SEGMENT_WIDTH;
+    }
+}
+
+function drawTerrain() {
+    // Draw main terrain with camera offset
+    ctx.strokeStyle = '#0f0';
+    ctx.lineWidth = 2;
+    ctx.shadowBlur = 10;
+    ctx.shadowColor = '#0f0';
+    ctx.beginPath();
+
+    let started = false;
+    for (let i = 0; i < terrain.length; i++) {
+        let screenX = terrain[i].x - llCameraX;
+        if (screenX < -100 || screenX > W + 100) continue; // Cull off-screen
+
+        if (!started) {
+            ctx.moveTo(screenX, terrain[i].y);
+            started = true;
+        } else {
+            ctx.lineTo(screenX, terrain[i].y);
+        }
+    }
+    ctx.stroke();
+    ctx.shadowBlur = 0;
+
+    // Draw landing zones
+    landingZones.forEach(zone => {
+        let screenX = zone.x - llCameraX;
+        if (screenX < -200 || screenX > W + 200) return; // Cull
+
+        // Color based on type
+        let zoneColor = zone.isExtraction ? '#fa0' : (zone.isFuelPad ? '#0ff' : '#0af');
+        if (zone.fuelCollected) zoneColor = '#444';
+
+        ctx.strokeStyle = zoneColor;
+        ctx.lineWidth = 3;
+        ctx.shadowBlur = 15;
+        ctx.shadowColor = zoneColor;
+
+        // Left marker
+        ctx.beginPath();
+        ctx.moveTo(screenX - zone.width/2, zone.y);
+        ctx.lineTo(screenX - zone.width/2, zone.y - 20);
+        ctx.stroke();
+
+        // Right marker
+        ctx.beginPath();
+        ctx.moveTo(screenX + zone.width/2, zone.y);
+        ctx.lineTo(screenX + zone.width/2, zone.y - 20);
+        ctx.stroke();
+
+        // Platform line
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.moveTo(screenX - zone.width/2, zone.y);
+        ctx.lineTo(screenX + zone.width/2, zone.y);
+        ctx.stroke();
+
+        // Blinking beacons for fuel pads
+        if (zone.isFuelPad && !zone.fuelCollected && Math.floor(Date.now() / 300) % 2 === 0) {
+            ctx.fillStyle = '#0ff';
+            ctx.shadowBlur = 20;
+            ctx.shadowColor = '#0ff';
+            ctx.beginPath();
+            ctx.arc(screenX, zone.y - 25, 4, 0, Math.PI * 2);
+            ctx.fill();
+        }
+
+        // Extraction beacon
+        if (zone.isExtraction && Math.floor(Date.now() / 200) % 2 === 0) {
+            ctx.fillStyle = '#fa0';
+            ctx.shadowBlur = 25;
+            ctx.shadowColor = '#fa0';
+            ctx.beginPath();
+            ctx.arc(screenX, zone.y - 30, 6, 0, Math.PI * 2);
+            ctx.fill();
+        }
+
+        // Label
+        ctx.fillStyle = zoneColor;
+        ctx.font = '12px Courier New';
+        ctx.textAlign = 'center';
+        ctx.shadowBlur = 5;
+        ctx.fillText(zone.label, screenX, zone.y + 18);
+        ctx.shadowBlur = 0;
+    });
+}
+
+// --- LANDER CLASS (dt-based momentum physics) ---
+class Lander extends Entity {
+    constructor(x, y) {
+        super(x, y, '#0f0');
+        this.angle = -Math.PI / 2; // Pointing up
+        this.vx = (Math.random() - 0.5) * 40; // pixels/sec horizontal drift
+        this.vy = 30; // pixels/sec initial descent
+        this.angVel = 0; // rad/sec
+        this.fuel = llState.fuel;
+        this.throttle = 0; // [0..1]
+        this.thrustSoundTimer = 0;
+
+        // Lander shape (rotated so nose points +X, legs point -X)
+        this.shape = [
+            [15, 0], [5, 8], [-5, 12], [-10, 10], [-12, 6], [-18, 8], [-12, 4],
+            [-12, -4], [-18, -8], [-12, -6], [-10, -10], [-5, -12], [5, -8]
+        ];
+    }
+
+    update(dt) {
+        if (llState.gameOver) return;
+
+        // Input handling
+        let map = InputMap['p1'];
+        let wantsThrust = keys[map.up] || keys['Space'] || gamepadState.p1.thrust;
+        let rotInput = 0;
+        if (keys[map.left] || gamepadState.p1.x < -0.3) rotInput = -1;
+        if (keys[map.right] || gamepadState.p1.x > 0.3) rotInput = 1;
+
+        // Angular momentum
+        let angAcc = rotInput * LL_ROT_ACCEL;
+        this.angVel += angAcc * dt;
+        this.angVel *= Math.pow(LL_ROT_DAMP, dt); // Damping
+        this.angle += this.angVel * dt;
+
+        // Angle clamp to ±90° from upright (prevent spinning upside down)
+        const UPRIGHT = -Math.PI / 2;
+        const MIN_ANGLE = UPRIGHT - Math.PI / 2; // -PI
+        const MAX_ANGLE = UPRIGHT + Math.PI / 2; // 0
+
+        if (this.angle < MIN_ANGLE) {
+            this.angle = MIN_ANGLE;
+            if (this.angVel < 0) this.angVel = 0;
+        }
+        if (this.angle > MAX_ANGLE) {
+            this.angle = MAX_ANGLE;
+            if (this.angVel > 0) this.angVel = 0;
+        }
+
+        // Ramping throttle
+        let targetThrottle = (wantsThrust && this.fuel > 0) ? 1 : 0;
+        this.throttle += (targetThrottle - this.throttle) * (1 - Math.exp(-LL_THROTTLE_RAMP * dt));
+
+        // Thrust acceleration
+        if (this.throttle > 0.01) {
+            let thrustX = Math.cos(this.angle) * LL_THRUST * this.throttle;
+            let thrustY = Math.sin(this.angle) * LL_THRUST * this.throttle;
+            this.vx += thrustX * dt;
+            this.vy += thrustY * dt;
+
+            // Fuel consumption
+            this.fuel -= LL_FUEL_RATE * this.throttle * dt;
+            this.fuel = Math.max(0, this.fuel);
+
+            // Particles scale with throttle
+            let particleRate = this.throttle * 10; // particles per second
+            let particleChance = particleRate * dt;
+            if (Math.random() < particleChance) {
+                for (let i = 0; i < Math.ceil(this.throttle * 3); i++) {
+                    let spread = (Math.random() - 0.5) * 0.5;
+                    let pAngle = this.angle + Math.PI + spread;
+                    let px = this.x - Math.cos(this.angle) * 12;
+                    let py = this.y - Math.sin(this.angle) * 12;
+                    let speed = 60 + this.throttle * 40; // pixels/sec
+                    llParticles.push(new LLParticle(px, py, pAngle, '#fa0', speed));
+                }
+            }
+
+            // Thrust sound scaled with throttle
+            this.thrustSoundTimer -= dt;
+            if (this.thrustSoundTimer <= 0) {
+                sfx.thrust();
+                this.thrustSoundTimer = 0.05 / Math.max(0.3, this.throttle); // Faster when higher throttle
+            }
+        }
+
+        // Gravity
+        this.vy += llState.gravity * dt;
+
+        // Light space drag (very subtle)
+        this.vx *= Math.pow(LL_SPACE_DRAG, dt);
+        this.vy *= Math.pow(LL_SPACE_DRAG, dt);
+
+        // Velocity caps
+        if (this.vx > LL_MAX_VX) this.vx = LL_MAX_VX;
+        if (this.vx < -LL_MAX_VX) this.vx = -LL_MAX_VX;
+        if (this.vy > LL_MAX_VY) this.vy = LL_MAX_VY;
+        if (this.vy < -LL_MAX_VY) this.vy = -LL_MAX_VY;
+
+        // Update position
+        this.x += this.vx * dt;
+        this.y += this.vy * dt;
+
+        // Check terrain collision
+        this.checkCollision();
+
+        // Update state
+        llState.fuel = this.fuel;
+    }
+
+    checkCollision() {
+        // Get terrain height at lander world position
+        let terrainY = H;
+        let currentZone = null;
+
+        for (let i = 0; i < terrain.length - 1; i++) {
+            if (terrain[i].x <= this.x && terrain[i+1].x >= this.x) {
+                let t = (this.x - terrain[i].x) / (terrain[i+1].x - terrain[i].x);
+                terrainY = terrain[i].y + t * (terrain[i+1].y - terrain[i].y);
+                break;
+            }
+        }
+
+        // Check if on a landing zone
+        for (let zone of landingZones) {
+            if (this.x >= zone.x - zone.width/2 && this.x <= zone.x + zone.width/2) {
+                currentZone = zone;
+                break;
+            }
+        }
+
+        // Lander bottom at y + 18
+        let landerBottom = this.y + 18;
+
+        if (landerBottom >= terrainY) {
+            let vertVel = Math.abs(this.vy);
+            let horzVel = Math.abs(this.vx);
+            let angleFromUpright = Math.abs(this.angle + Math.PI/2);
+            while (angleFromUpright > Math.PI) angleFromUpright -= 2 * Math.PI;
+            angleFromUpright = Math.abs(angleFromUpright);
+
+            // Landing checks
+            let safeVelocity = vertVel <= llState.safeLandingVelV && horzVel <= llState.safeLandingVelH;
+            let safeAngle = angleFromUpright <= llState.safeLandingAngle;
+
+            if (currentZone && safeVelocity && safeAngle) {
+                // Safe landing!
+                this.y = terrainY - 18;
+                this.vx = 0;
+                this.vy = 0;
+                this.angVel = 0;
+                llState.landed = true;
+
+                // Handle fuel pad
+                if (currentZone.isFuelPad && !currentZone.fuelCollected) {
+                    this.fuel = Math.min(LL_MAX_FUEL, this.fuel + LL_FUEL_PICKUP);
+                    currentZone.fuelCollected = true;
+                    llState.fuelCollected = true;
+                    sfx.powerUp();
+                    popups.push(new FloatingText(this.x, this.y - 40, `+${LL_FUEL_PICKUP} FUEL`, '#0ff', true));
+                }
+
+                // Handle extraction point
+                if (currentZone.isExtraction) {
+                    llState.gameOver = true;
+                    let baseScore = 2000;
+                    let fuelBonus = Math.floor(this.fuel * 20);
+                    let landingScore = baseScore + fuelBonus;
+                    llScore += landingScore;
+
+                    showLandingResult(true, {
+                        score: landingScore,
+                        multiplier: currentZone.multiplier,
+                        fuelRemaining: this.fuel,
+                        vertVel: vertVel.toFixed(0),
+                        horzVel: horzVel.toFixed(0)
+                    });
+
+                    sfx.playTone(440, 'sine', 0.2);
+                    setTimeout(() => sfx.playTone(660, 'sine', 0.2), 150);
+                    setTimeout(() => sfx.playTone(880, 'sine', 0.4), 300);
+                } else {
+                    // Regular pad - reset landed flag after brief pause
+                    llState.onFuelPad = true;
+                    setTimeout(() => {
+                        llState.landed = false;
+                        llState.onFuelPad = false;
+                        llState.fuelCollected = false;
+                    }, 100);
+                }
+
+            } else {
+                // Crash!
+                llState.crashed = true;
+                llState.gameOver = true;
+
+                let reason = !currentZone ? 'MISSED LANDING ZONE' :
+                             !safeVelocity ? 'VELOCITY TOO HIGH' : 'ANGLE TOO STEEP';
+
+                showLandingResult(false, {
+                    reason: reason,
+                    vertVel: vertVel.toFixed(0),
+                    horzVel: horzVel.toFixed(0),
+                    angle: (angleFromUpright * 180 / Math.PI).toFixed(0)
+                });
+
+                // Explosion
+                for (let i = 0; i < 50; i++) {
+                    let angle = Math.random() * Math.PI * 2;
+                    llParticles.push(new LLParticle(this.x, this.y, angle, '#f00', 150));
+                }
+                sfx.explosion();
+                screenShake = 20;
+            }
+        }
+    }
+
+    draw() {
+        if (llState.crashed) return;
+
+        // Convert world to screen coords
+        let screenX = this.x - llCameraX;
+        let screenY = this.y;
+
+        ctx.strokeStyle = this.color;
+        ctx.lineWidth = 2;
+        ctx.shadowBlur = 10;
+        ctx.shadowColor = this.color;
+
+        // Draw lander body
+        ctx.beginPath();
+        for (let i = 0; i < this.shape.length; i++) {
+            let rx = this.shape[i][0] * Math.cos(this.angle) - this.shape[i][1] * Math.sin(this.angle);
+            let ry = this.shape[i][0] * Math.sin(this.angle) + this.shape[i][1] * Math.cos(this.angle);
+            if (i === 0) ctx.moveTo(screenX + rx, screenY + ry);
+            else ctx.lineTo(screenX + rx, screenY + ry);
+        }
+        ctx.closePath();
+        ctx.stroke();
+
+        // Draw thrust flame scaled with throttle
+        if (this.throttle > 0.05) {
+            ctx.strokeStyle = '#fa0';
+            ctx.shadowColor = '#fa0';
+            ctx.shadowBlur = 10 + this.throttle * 10;
+            ctx.beginPath();
+            let flameLen = (15 + Math.random() * 10) * this.throttle;
+            let bx = screenX - Math.cos(this.angle) * 12;
+            let by = screenY - Math.sin(this.angle) * 12;
+            ctx.moveTo(bx + Math.cos(this.angle + 0.3) * 5, by + Math.sin(this.angle + 0.3) * 5);
+            ctx.lineTo(bx - Math.cos(this.angle) * flameLen, by - Math.sin(this.angle) * flameLen);
+            ctx.lineTo(bx + Math.cos(this.angle - 0.3) * 5, by + Math.sin(this.angle - 0.3) * 5);
+            ctx.stroke();
+        }
+
+        ctx.shadowBlur = 0;
+    }
+}
+
+class LLParticle {
+    constructor(x, y, angle, color, speed = 60) {
+        this.x = x;
+        this.y = y;
+        let variation = 1 + (Math.random() - 0.5) * 0.5;
+        this.vx = Math.cos(angle) * speed * variation;
+        this.vy = Math.sin(angle) * speed * variation;
+        this.color = color;
+        this.life = 0.5 + Math.random() * 0.5; // seconds
+        this.maxLife = this.life;
+    }
+
+    update(dt) {
+        this.x += this.vx * dt;
+        this.y += this.vy * dt;
+        this.vy += LL_GRAVITY_CH1 * 0.3 * dt; // Slight gravity
+        this.life -= dt;
+    }
+
+    draw() {
+        let screenX = this.x - llCameraX;
+        if (screenX < -50 || screenX > W + 50) return;
+
+        ctx.fillStyle = this.color;
+        ctx.globalAlpha = Math.max(0, this.life / this.maxLife);
+        ctx.fillRect(screenX - 1, this.y - 1, 2, 2);
+        ctx.globalAlpha = 1;
+    }
+}
+
+// --- LUNAR LANDER UI ---
+function updateLLHud() {
+    const fuelPercent = Math.max(0, llState.fuel);
+    const fuelValue = document.getElementById('ll-fuel-value');
+    const fuelFill = document.getElementById('ll-fuel-fill');
+
+    fuelValue.textContent = Math.floor(fuelPercent) + '%';
+    fuelFill.style.width = fuelPercent + '%';
+
+    // Fuel warnings
+    fuelValue.className = 'll-gauge-value';
+    fuelFill.className = 'll-fuel-fill';
+    if (fuelPercent <= 20) {
+        fuelValue.classList.add('danger');
+        fuelFill.classList.add('danger');
+    } else if (fuelPercent <= 40) {
+        fuelValue.classList.add('warning');
+        fuelFill.classList.add('warning');
+    }
+
+    // Altitude (distance to terrain)
+    let terrainY = H;
+    if (lander) {
+        for (let i = 0; i < terrain.length - 1; i++) {
+            if (terrain[i].x <= lander.x && terrain[i+1].x >= lander.x) {
+                let t = (lander.x - terrain[i].x) / (terrain[i+1].x - terrain[i].x);
+                terrainY = terrain[i].y + t * (terrain[i+1].y - terrain[i].y);
+                break;
+            }
+        }
+    }
+    let altitude = lander ? Math.max(0, Math.floor(terrainY - lander.y - 18)) : 0;
+    document.getElementById('ll-altitude').textContent = altitude;
+
+    // Velocities (already in pixels/sec)
+    if (lander) {
+        let vertVel = document.getElementById('ll-vert-vel');
+        let horzVel = document.getElementById('ll-horz-vel');
+
+        vertVel.textContent = Math.abs(lander.vy).toFixed(0);
+        horzVel.textContent = Math.abs(lander.vx).toFixed(0);
+
+        // Velocity warnings
+        vertVel.className = 'll-gauge-value';
+        horzVel.className = 'll-gauge-value';
+
+        if (Math.abs(lander.vy) > llState.safeLandingVelV) {
+            vertVel.classList.add('danger');
+        } else if (Math.abs(lander.vy) > llState.safeLandingVelV * 0.7) {
+            vertVel.classList.add('warning');
+        }
+
+        if (Math.abs(lander.vx) > llState.safeLandingVelH) {
+            horzVel.classList.add('danger');
+        } else if (Math.abs(lander.vx) > llState.safeLandingVelH * 0.7) {
+            horzVel.classList.add('warning');
+        }
+    }
+
+    document.getElementById('ll-score').textContent = llScore;
+}
+
+function showLandingResult(success, data) {
+    const resultDiv = document.getElementById('landing-result');
+    const titleEl = document.getElementById('landing-result-title');
+    const statsEl = document.getElementById('landing-stats');
+
+    if (success) {
+        titleEl.textContent = data.multiplier >= 2 ? 'PRECISION LANDING!' : 'SUCCESSFUL LANDING';
+        titleEl.className = 'success';
+        statsEl.innerHTML = `
+            SCORE: +${data.score}<br>
+            ZONE MULTIPLIER: ${data.multiplier}x<br>
+            FUEL REMAINING: ${data.fuelRemaining.toFixed(0)}%<br>
+            FINAL VELOCITY: V=${data.vertVel} H=${data.horzVel}
+        `;
+    } else {
+        titleEl.textContent = 'CRASH';
+        titleEl.className = 'failure';
+        statsEl.innerHTML = `
+            ${data.reason}<br>
+            VELOCITY: V=${data.vertVel} H=${data.horzVel}<br>
+            ANGLE: ${data.angle}°
+        `;
+    }
+
+    resultDiv.classList.add('visible');
+    llState.resultTimer = 180; // 3 seconds at 60fps
+}
+
+// --- CUTSCENE SYSTEM ---
+let cutsceneActive = false;
+let currentCutscene = null;
+
+function showCutscene(cutsceneId) {
+    const cutsceneData = CUTSCENES[cutsceneId];
+    if (!cutsceneData) return;
+
+    currentCutscene = cutsceneData;
+    cutsceneActive = true;
+
+    document.getElementById('cutscene-content').innerHTML = cutsceneData.text;
+    document.getElementById('cutscene-screen').classList.add('visible');
+
+    // Listen for any key to continue
+    setTimeout(() => {
+        window.addEventListener('keydown', handleCutsceneContinue);
+        window.addEventListener('mousedown', handleCutsceneContinue);
+    }, 500); // Small delay to prevent accidental skip
+}
+
+function handleCutsceneContinue(e) {
+    if (!cutsceneActive) return;
+
+    window.removeEventListener('keydown', handleCutsceneContinue);
+    window.removeEventListener('mousedown', handleCutsceneContinue);
+
+    document.getElementById('cutscene-screen').classList.remove('visible');
+    cutsceneActive = false;
+
+    // Progress to next chapter
+    if (currentCutscene && currentCutscene.nextChapter !== undefined) {
+        startChapter(currentCutscene.nextChapter);
+    }
+    currentCutscene = null;
+}
+
+// --- CHAPTER/SCENE MANAGEMENT ---
+function startChapter(chapter) {
+    currentChapter = chapter;
+
+    // Hide all UI elements first
+    document.getElementById('ll-hud').classList.remove('visible');
+    document.getElementById('bottom-bar').style.display = 'none';
+    document.getElementById('landing-result').classList.remove('visible');
+
+    if (chapter === 0) {
+        // Return to menu
+        currentScene = SCENE_TYPE.MENU;
+        document.getElementById('start-screen').style.display = 'flex';
+        setCursorVisible(true);
+        startAttractMode();
+        return;
+    }
+
+    if (chapter === 1 || chapter === 2) {
+        // Lunar Lander chapters
+        currentScene = SCENE_TYPE.LUNAR_LANDER;
+        document.getElementById('ll-hud').classList.add('visible');
+
+        document.getElementById('ll-chapter-num').textContent = chapter;
+        document.getElementById('ll-chapter-name').textContent = chapter === 1 ? 'ORBITAL APPROACH' : 'FINAL DESCENT';
+
+        initLunarLander(chapter);
+
+    } else if (chapter >= 3) {
+        // Rip Off chapters (existing game)
+        currentScene = SCENE_TYPE.RIP_OFF;
+        document.getElementById('bottom-bar').style.display = 'flex';
+
+        // Transfer fuel from LL to Rip Off (affects starting lives/resources)
+        // Higher fuel = more starting lives
+        let bonusLives = Math.floor(llState.fuel / 25); // 0-4 bonus lives based on fuel
+
+        initRipOffFromLL(bonusLives);
+    }
+}
+
+function initLunarLander(chapter) {
+    activeGame = true;
+    gamePaused = false;
+    attractMode = false;
+    setCursorVisible(false);
+
+    // Reset LL state
+    llState.chapter = chapter;
+    llState.gameOver = false;
+    llState.landed = false;
+    llState.crashed = false;
+    llState.resultTimer = 0;
+    llState.onFuelPad = false;
+    llState.fuelCollected = false;
+
+    // Chapter-specific settings
+    if (chapter === 1) {
+        llState.fuel = 150;
+        llState.gravity = LL_GRAVITY_CH1;
+        llState.goalX = W * LL_GOAL_SCREENS;
+    } else {
+        // Chapter 2: use remaining fuel from chapter 1
+        llState.fuel = llFuelRemaining;
+        llState.gravity = LL_GRAVITY_CH2;
+        llState.goalX = W * (LL_GOAL_SCREENS + 2); // Longer run
+    }
+
+    // Initialize terrain generation and camera
+    llCameraX = 0;
+    llCameraScale = 1.0;
+    llLastTime = 0;
+    initTerrain(chapter);
+
+    // Create lander at starting position (world coords)
+    lander = new Lander(W / 2, 50);
+    lander.fuel = llState.fuel;
+    lander.vx = (Math.random() - 0.5) * 60; // pixels/sec
+
+    llParticles = [];
+    screenShake = 0;
+}
+
+function initRipOffFromLL(bonusLives) {
+    // Start Rip Off with bonus from LL performance
+    initEntities();
+    lives = 3 + bonusLives; // Base 3 lives + bonus
+    score = llScore; // Carry over LL score
+    document.getElementById("ui-score").innerText = score;
+    drawLivesUI();
+}
+
+// Modified startGame to support chapter system
+function startGameWithChapters(mode) {
+    playerCount = mode;
+    initAudio();
+    document.getElementById("start-screen").style.display = 'none';
+
+    // Reset scores for new game
+    llScore = 0;
+    llFuelRemaining = 100;
+    score = 0;
+
+    // Start with intro cutscene
+    showCutscene('intro');
+}
+
+// Lunar Lander game loop
+function llLoop() {
+    if (gamePaused || currentScene !== SCENE_TYPE.LUNAR_LANDER) return;
+
+    // Calculate dt
+    const now = performance.now() / 1000;
+    let dt = llLastTime > 0 ? now - llLastTime : 0.016;
+    dt = Math.min(dt, 0.05); // Clamp to 50ms max
+    llLastTime = now;
+
+    // Clear with trail effect
+    ctx.fillStyle = 'rgba(5,5,5,0.4)';
+    ctx.fillRect(0, 0, W, H);
+
+    // Screen shake
+    if (screenShake > 0) {
+        ctx.save();
+        ctx.translate((Math.random() - 0.5) * screenShake, (Math.random() - 0.5) * screenShake);
+        screenShake *= 0.9;
+        if (screenShake < 0.5) screenShake = 0;
+    }
+
+    // Draw starfield background (parallax with camera)
+    ctx.fillStyle = '#fff';
+    for (let i = 0; i < 100; i++) {
+        let sx = ((i * 127 + 50) - llCameraX * 0.3) % W;
+        if (sx < 0) sx += W;
+        let sy = (i * 83 + 30) % (H * 0.5);
+        ctx.globalAlpha = 0.2 + (i % 3) * 0.15;
+        ctx.fillRect(sx, sy, 1, 1);
+    }
+    ctx.globalAlpha = 1;
+
+    // Update camera (threshold-based dead zone)
+    if (lander && !llState.gameOver) {
+        let screenCenter = llCameraX + W / 2;
+        if (lander.x > screenCenter + LL_CAMERA_DEADZONE) {
+            llCameraX = lander.x - (W / 2 + LL_CAMERA_DEADZONE);
+        } else if (lander.x < screenCenter - LL_CAMERA_DEADZONE) {
+            llCameraX = lander.x - (W / 2 - LL_CAMERA_DEADZONE);
+        }
+        llCameraX = Math.max(0, llCameraX); // Don't scroll left of start
+    }
+
+    // Calculate and interpolate zoom
+    let targetZoom = calculateTargetZoom();
+    llCameraScale += (targetZoom - llCameraScale) * (1 - Math.exp(-LL_ZOOM_RATE * dt));
+
+    // Apply zoom transform (scale around ship position)
+    let shipScreenX = lander ? (lander.x - llCameraX) : W / 2;
+    let shipScreenY = lander ? lander.y : H / 2;
+
+    ctx.save();
+    ctx.translate(shipScreenX, shipScreenY);
+    ctx.scale(llCameraScale, llCameraScale);
+    ctx.translate(-shipScreenX, -shipScreenY);
+
+    // Extend terrain if needed
+    extendTerrain();
+
+    // Draw terrain
+    drawTerrain();
+
+    // Update and draw lander
+    if (lander && !llState.gameOver) {
+        pollGamepads();
+        lander.update(dt);
+    }
+    if (lander) lander.draw();
+
+    // Update and draw particles
+    llParticles = llParticles.filter(p => {
+        p.update(dt);
+        p.draw();
+        return p.life > 0;
+    });
+
+    // Update and draw popups
+    popups.forEach(p => { p.update(dt); p.draw(); });
+    popups = popups.filter(p => p.life > 0);
+
+    // Restore zoom transform (HUD/beacon drawn at base scale)
+    ctx.restore();
+
+    // Update HUD
+    updateLLHud();
+
+    // Draw beacon indicator
+    if (lander && !llState.gameOver) {
+        drawBeacon();
+    }
+
+    if (screenShake > 0) ctx.restore();
+
+    // Handle game over state
+    if (llState.gameOver) {
+        llState.resultTimer -= dt * 60; // Convert to frames equivalent
+
+        if (llState.resultTimer <= 0) {
+            document.getElementById('landing-result').classList.remove('visible');
+
+            if (llState.landed) {
+                // Success! Save fuel and progress
+                llFuelRemaining = llState.fuel;
+
+                if (llState.chapter === 1) {
+                    showCutscene('afterChapter1');
+                } else if (llState.chapter === 2) {
+                    showCutscene('afterChapter2');
+                }
+            } else {
+                // Crash - game over or retry
+                activeGame = false;
+                pendingScore = llScore;
+                pendingReason = 'LANDER DESTROYED';
+                // Hide all other overlays
+                document.getElementById("cutscene-screen").classList.remove('visible');
+                document.getElementById("landing-result").classList.remove('visible');
+                document.getElementById("ll-hud").classList.remove('visible');
+
+                if (isHighScore(llScore)) {
+                    document.getElementById("entry-score").innerText = llScore;
+                    document.getElementById("name-input").value = '';
+                    document.getElementById("name-entry-screen").style.display = 'flex';
+                    setTimeout(() => {
+                        const input = document.getElementById("name-input");
+                        input.focus();
+                        input.select();
+                    }, 150);
+                } else {
+                    showGameOverScreen();
+                }
+            }
+        }
+    }
+}
+
+// Calculate target zoom based on proximity to terrain and pads
+function calculateTargetZoom() {
+    if (!lander || llState.gameOver) return LL_BASE_ZOOM;
+
+    let targetZoom = LL_BASE_ZOOM;
+
+    // 1. Check altitude above terrain
+    let terrainY = H;
+    for (let i = 0; i < terrain.length - 1; i++) {
+        if (terrain[i].x <= lander.x && terrain[i+1].x >= lander.x) {
+            let t = (lander.x - terrain[i].x) / (terrain[i+1].x - terrain[i].x);
+            terrainY = terrain[i].y + t * (terrain[i+1].y - terrain[i].y);
+            break;
+        }
+    }
+    let altitude = terrainY - lander.y - 18; // Lander bottom offset
+
+    if (altitude < LL_ZOOM_ALTITUDE_THRESHOLD && altitude > 0) {
+        // Interpolate zoom based on altitude
+        let altitudeFactor = 1 - (altitude / LL_ZOOM_ALTITUDE_THRESHOLD);
+        targetZoom = Math.max(targetZoom, LL_BASE_ZOOM + (LL_CLOSE_ZOOM - LL_BASE_ZOOM) * altitudeFactor);
+    }
+
+    // 2. Check proximity to steep walls (look ahead/behind)
+    let checkRadius = 200;
+    for (let i = 0; i < terrain.length - 1; i++) {
+        if (Math.abs(terrain[i].x - lander.x) < checkRadius) {
+            let heightDiff = Math.abs(terrain[i+1].y - terrain[i].y);
+            if (heightDiff > 100) {
+                // Near a steep wall
+                let wallFactor = Math.min(1, heightDiff / 300);
+                targetZoom = Math.max(targetZoom, LL_BASE_ZOOM + (LL_CLOSE_ZOOM - LL_BASE_ZOOM) * wallFactor * 0.6);
+            }
+        }
+    }
+
+    // 3. Check proximity to landing pads
+    for (let zone of landingZones) {
+        let distToPad = Math.abs(zone.x - lander.x);
+        if (distToPad < LL_ZOOM_PAD_RADIUS) {
+            let padFactor = 1 - (distToPad / LL_ZOOM_PAD_RADIUS);
+            let padZoom = LL_BASE_ZOOM + (LL_CLOSE_ZOOM - LL_BASE_ZOOM) * padFactor * 0.8;
+            targetZoom = Math.max(targetZoom, padZoom);
+        }
+    }
+
+    return targetZoom;
+}
+
+// Draw extraction beacon indicator
+function drawBeacon() {
+    if (!lander) return;
+
+    let distToGoal = Math.max(0, llState.goalX - lander.x);
+
+    // Arrow pointing right
+    let arrowX = W - 80;
+    let arrowY = 60;
+
+    ctx.fillStyle = '#fa0';
+    ctx.strokeStyle = '#fa0';
+    ctx.lineWidth = 2;
+    ctx.shadowBlur = 10;
+    ctx.shadowColor = '#fa0';
+
+    // Arrow
+    ctx.beginPath();
+    ctx.moveTo(arrowX, arrowY);
+    ctx.lineTo(arrowX + 20, arrowY);
+    ctx.lineTo(arrowX + 15, arrowY - 5);
+    ctx.moveTo(arrowX + 20, arrowY);
+    ctx.lineTo(arrowX + 15, arrowY + 5);
+    ctx.stroke();
+
+    // Distance
+    ctx.font = '14px Courier New';
+    ctx.textAlign = 'right';
+    ctx.fillText(`${Math.floor(distToGoal)}m`, arrowX - 10, arrowY + 5);
+
+    ctx.shadowBlur = 0;
+}
+
+// --- FLOATING TEXT (used in both LL and Rip Off) ---
+class FloatingText {
+    constructor(x, y, text, color, isWorldCoord = false) {
+        this.x=x; this.y=y; this.text=text; this.color=color; this.life=2; // seconds
+        this.maxLife = this.life;
+        this.isWorldCoord = isWorldCoord;
+    }
+    update(dt = 1/60) { this.y -= 30 * (dt || 1/60); this.life -= (dt || 1/60); }
+    draw() {
+        let drawX = this.isWorldCoord ? (this.x - llCameraX) : this.x;
+        ctx.fillStyle=this.color; ctx.globalAlpha=this.life/this.maxLife;
+        ctx.font="bold 20px 'Courier New'"; ctx.fillText(this.text, drawX, this.y);
+        ctx.globalAlpha=1;
+    }
+}
+
+function drawLivesUI() {
+    lifeCtx.clearRect(0,0,lifeCanvas.width,lifeCanvas.height);
+    for(let i=0;i<lives;i++){ if(i>=8)break; let x=15+i*25; lifeCtx.save(); lifeCtx.translate(x,15); lifeCtx.rotate(-Math.PI/2); lifeCtx.beginPath(); lifeCtx.strokeStyle="#0f0"; lifeCtx.lineWidth=2; let s=SHAPES.p1; for(let j=0;j<s.length;j++) (j===0?lifeCtx.moveTo:lifeCtx.lineTo).call(lifeCtx, s[j][0]*.6, s[j][1]*.6); lifeCtx.closePath(); lifeCtx.stroke(); lifeCtx.restore(); }
+}
+
+function startWave() {
+    round=0;
+
+    // AI ADAPTATION CHECK
+    tacticalMode = (kitingCounter > 300); // If kited for ~5 seconds total last wave
+    kitingCounter = 0; // Reset for new wave
+
+    const title=document.getElementById("wave-display");
+    document.getElementById("wave-num-disp").innerText = wave;
+    document.getElementById("wave-sub").innerText = tacticalMode ? "SWARM ADAPTING..." : "";
+
+    title.style.opacity=1;
+    sfx.playTone(200,'sine',0.5); setTimeout(()=>title.style.opacity=0, 2500);
+    document.getElementById("ui-wave").innerText = wave;
+    loadRound();
+}
+
+function loadRound() {
+    waveQueue=[]; let cfg;
+    if(wave<=WAVE_CONFIG.length) cfg=WAVE_CONFIG[wave-1][round];
+    else { let s=wave-3; cfg={basic:2+Math.floor(s/2),dash:Math.floor(s/3),hunter:1+Math.floor(s/2)}; }
+    if(cfg){ let m=(playerCount===2)?1.5:1.0; const add=(t,c)=>{ if(!c)return; let n=Math.ceil(c*m); for(let i=0;i<n;i++)waveQueue.push({type:t,speed:1.0+(wave>3?0.1:0),id:i}); }; add('basic',cfg.basic); add('dash',cfg.dash); add('hunter',cfg.hunter); }
+}
+
+function setCursorVisible(visible) { document.body.classList.toggle('playing', !visible); }
+let countdownActive = false;
+function startGame(mode) {
+    // Arcade mode - skip Lunar Lander, go straight to Rip Off
+    playerCount=mode;
+    initAudio();
+    document.getElementById("start-screen").style.display='none';
+    document.getElementById("game-over-screen").style.display='none';
+    document.getElementById("ll-hud").classList.remove('visible');
+    document.getElementById("bottom-bar").style.display='flex';
+    currentScene = SCENE_TYPE.RIP_OFF;
+    currentChapter = 3;
+    llScore = 0;
+    score = 0;
+    attractMode=false;
+    activeGame=true;
+    gamePaused=false;
+    setCursorVisible(false);
+    initEntities();
+}
+function togglePause() {
+    if(!activeGame || countdownActive) return;
+    if(!gamePaused) {
+        // Pausing the game
+        gamePaused = true;
+        document.getElementById("pause-screen").style.display = 'flex';
+        setCursorVisible(true);
+    } else {
+        // Resuming - start countdown
+        document.getElementById("pause-screen").style.display = 'none';
+        startResumeCountdown();
+    }
+}
+function startResumeCountdown() {
+    countdownActive = true;
+    setCursorVisible(false);
+    let count = 3;
+    const countdownEl = document.getElementById('countdown-display');
+    countdownEl.innerText = count;
+    countdownEl.classList.add('visible');
+    sfx.playTone(440, 'square', 0.1);
+
+    const countInterval = setInterval(() => {
+        count--;
+        if(count > 0) {
+            countdownEl.innerText = count;
+            sfx.playTone(440, 'square', 0.1);
+        } else {
+            countdownEl.innerText = 'GO!';
+            sfx.playTone(880, 'square', 0.2);
+            setTimeout(() => {
+                countdownEl.classList.remove('visible');
+                gamePaused = false;
+                countdownActive = false;
+            }, 300);
+            clearInterval(countInterval);
+        }
+    }, 1000);
+}
+function quitGame() {
+    activeGame=false;
+    gamePaused=false;
+    currentScene = SCENE_TYPE.MENU;
+    currentChapter = 0;
+    document.getElementById("pause-screen").style.display='none';
+    document.getElementById("game-over-screen").style.display='none';
+    document.getElementById("highscores-screen").style.display='none';
+    document.getElementById("ll-hud").classList.remove('visible');
+    document.getElementById("landing-result").classList.remove('visible');
+    document.getElementById("cutscene-screen").classList.remove('visible');
+    document.getElementById("bottom-bar").style.display='none';
+    document.getElementById("start-screen").style.display='flex';
+    setCursorVisible(true);
+    startAttractMode();
+}
+function resetGame() {
+    document.getElementById("game-over-screen").style.display='none';
+    document.getElementById("highscores-screen").style.display='none';
+    document.getElementById("name-entry-screen").style.display='none';
+
+    // Reset based on where the game over happened
+    if (currentScene === SCENE_TYPE.LUNAR_LANDER) {
+        // Restart from LL chapter 1
+        llScore = 0;
+        llFuelRemaining = 100;
+        showCutscene('intro');
+    } else {
+        // Restart Rip Off
+        document.getElementById("bottom-bar").style.display='flex';
+        llScore = 0;
+        score = 0;
+        initEntities();
+        activeGame=true;
+        gamePaused=false;
+        attractMode=false;
+        setCursorVisible(false);
+    }
+}
+
+function initEntities() {
+    players=[]; if(playerCount===1)players.push(new Player(1,W/2,H/2+120)); else {players.push(new Player(1,W/2-80,H/2+120));players.push(new Player(2,W/2+80,H/2+120));}
+    enemies=[]; bullets=[]; particles=[]; fuels=[]; powerups=[]; popups=[];
+    score=0; lives=5; nextLifeScore=5000; wave=1; round=0; screenShake=0; kitingCounter=0; tacticalMode=false;
+    for(let i=0;i<8;i++)fuels.push(new Fuel(W/2-60+(i%4)*40,H/2-40+Math.floor(i/4)*40));
+    document.getElementById("ui-score").innerText="0"; drawLivesUI(); startWave();
+}
+function startAttractMode() {
+    attractMode=true;
+    activeGame=false;
+    currentScene = SCENE_TYPE.MENU;
+    document.getElementById("bottom-bar").style.display='none';
+    document.getElementById("ll-hud").classList.remove('visible');
+    enemies=[]; bullets=[]; particles=[]; fuels=[]; players=[]; powerups=[]; popups=[];
+    for(let i=0;i<8;i++)fuels.push(new Fuel(W/2-60+(i%4)*40,H/2-40+Math.floor(i/4)*40));
+    for(let i=0;i<6;i++)enemies.push(new Enemy({type:i%2==0?'basic':'hunter',speed:0.5,id:i}));
+}
+function gameOver(r) {
+    activeGame=false;
+    setCursorVisible(true);
+    pendingScore = score;
+    pendingReason = r;
+    // Hide all other overlays first
+    document.getElementById("cutscene-screen").classList.remove('visible');
+    document.getElementById("landing-result").classList.remove('visible');
+    document.getElementById("pause-screen").style.display = 'none';
+    if(isHighScore(score)) {
+        document.getElementById("entry-score").innerText = score;
+        document.getElementById("name-input").value = '';
+        document.getElementById("name-entry-screen").style.display = 'flex';
+        setTimeout(() => {
+            const input = document.getElementById("name-input");
+            input.focus();
+            input.select();
+        }, 150);
+    } else {
+        showGameOverScreen();
+    }
+}
+
+function showGameOverScreen() {
+    document.getElementById("game-over-score").innerText = "SCORE: " + pendingScore;
+    document.getElementById("game-over-reason").innerText = pendingReason;
+    document.getElementById("game-over-screen").style.display='flex';
+}
+
+// --- RIP OFF ENTITIES ---
+class PowerUp extends Entity { constructor(x,y){super(x,y,"#0ff");this.vx=(Math.random()-.5)*.5;this.vy=(Math.random()-.5)*.5;this.shape=SHAPES.powerup;this.life=600;} update(){super.update();this.life--;this.angle+=0.05;if(this.life<=0)this.dead=true;} draw(){if(this.life<100&&Math.floor(this.life/10)%2==0)return;super.draw();} }
+class Particle extends Entity { constructor(x,y,c,s=1){super(x,y,c);this.life=20+Math.random()*20;let a=Math.random()*6.28,v=Math.random()*4*s;this.vx=Math.cos(a)*v;this.vy=Math.sin(a)*v;} update(){super.update();this.life--;this.vx*=0.95;this.vy*=0.95;} draw(){ctx.fillStyle=this.color;ctx.globalAlpha=this.life/40;ctx.fillRect(this.x,this.y,3,3);ctx.globalAlpha=1;} }
+class Fuel extends Entity { constructor(x,y){super(x,y,"#08f");this.shape=SHAPES.fuel;this.captured=false;} update(){if(!this.captured){this.vx*=0.85;this.vy*=0.85;this.x+=this.vx;this.y+=this.vy;}} }
+function createExplosion(x,y,c,n){for(let i=0;i<n;i++)particles.push(new Particle(x,y,c));}
+
+class Player extends Entity {
+    constructor(id,x,y) { super(x,y,id===1?"#0f0":"#0af"); this.id=id; this.shape=id===1?SHAPES.p1:SHAPES.p2; this.respawnTimer=0; this.homeX=x; this.homeY=y; this.cooldown=0; this.shieldTimer=0; }
+    update() {
+        if(this.respawnTimer>0){this.respawnTimer--;this.x+=(this.homeX-this.x)*0.05;this.y+=(this.homeY-this.y)*0.05;return;}
+        let rot=0,thrust=false,fire=false;
+        let map=InputMap[this.id===1?'p1':'p2'];
+        if(keys[map.left])rot=-1; if(keys[map.right])rot=1; if(keys[map.up])thrust=true; if(keys[map.fire])fire=true;
+        if(this.id===1&&mouseState.leftDown)fire=true;
+        let gp=this.id===1?gamepadState.p1:gamepadState.p2;
+        if(gp.x!==0)rot=gp.x; if(gp.thrust)thrust=true; if(gp.fire)fire=true;
+        this.angle+=rot*0.12;
+        if(thrust){
+            this.vx+=Math.cos(this.angle)*0.4; this.vy+=Math.sin(this.angle)*0.4;
+            if(Math.random()>.3)particles.push(new Particle(this.x-Math.cos(this.angle)*15,this.y-Math.sin(this.angle)*15,this.color,0.5));
+            if(Math.floor(Date.now()/80)%2===0)sfx.thrust();
+        }
+
+        // KITING DETECTION LOGIC
+        // Dot Product of Facing Vector vs Velocity Vector
+        // If < -0.5, player is moving backwards relative to facing
+        let speed = Math.hypot(this.vx, this.vy);
+        if(fire && speed > 1.0) {
+            let dot = Math.cos(this.angle) * (this.vx/speed) + Math.sin(this.angle) * (this.vy/speed);
+            if(dot < -0.5) kitingCounter++;
+        }
+
+        this.vx*=FRICTION; this.vy*=FRICTION;
+        super.update();
+        if(this.x<-40)this.x=W+40; if(this.x>W+40)this.x=-40; if(this.y<-40)this.y=H+40; if(this.y>H+40)this.y=-40;
+        if(this.cooldown>0)this.cooldown--;
+        if(fire && this.cooldown<=0){ bullets.push(new Bullet(this.x,this.y,this.angle,this.color,false)); this.vx-=Math.cos(this.angle)*0.5; this.vy-=Math.sin(this.angle)*0.5; sfx.laser(); this.cooldown=10; }
+        if(this.shieldTimer>0)this.shieldTimer--;
+    }
+    die() {
+        if(this.respawnTimer>0 || this.shieldTimer>0)return;
+        sfx.explosion(); screenShake=15; createExplosion(this.x,this.y,this.color,40);
+        lives--; drawLivesUI();
+        if(lives<=0){this.dead=true;gameOver("FLEET DESTROYED");}else{this.x=-1000;this.vx=0;this.vy=0;this.respawnTimer=120;}
+    }
+    draw(){
+        if(!this.dead && (this.respawnTimer===0 || Math.floor(Date.now()/100)%2===0)){
+            super.draw();
+            if(this.shieldTimer>0){
+                ctx.strokeStyle="#0ff"; ctx.lineWidth=2; ctx.beginPath(); ctx.arc(this.x,this.y,24,0,Math.PI*2); ctx.stroke();
+                ctx.beginPath(); let ax=this.x+Math.cos(this.angle)*25, ay=this.y+Math.sin(this.angle)*25; ctx.moveTo(ax+Math.cos(this.angle+1.5)*15,ay+Math.sin(this.angle+1.5)*15); ctx.lineTo(ax,ay); ctx.lineTo(ax+Math.cos(this.angle-1.5)*15,ay+Math.sin(this.angle-1.5)*15); ctx.stroke();
+            }
+        }
+    }
+}
+
+class Enemy extends Entity {
+    constructor(cfg) {
+        let c = cfg.type==='hunter'?"#b0f":(cfg.type==='dash'?"#fa0":"#f04");
+        super(0,0,c); this.type=cfg.type; this.speedMod=cfg.speed||1; this.canShoot=(this.type==='dash'); this.shootTimer=Math.random()*200; this.spawnId=cfg.id||0;
+        if(Math.random()<0.5){this.x=Math.random()<0.5?-80:W+80;this.y=Math.random()*H;}else{this.x=Math.random()*W;this.y=Math.random()<0.5?-80:H+80;}
+        this.carrying=null;
+    }
+    update() {
+        if(attractMode){
+            if(Math.random()<0.02)this.angle+=(Math.random()-.5); this.vx+=Math.cos(this.angle)*.1; this.vy+=Math.sin(this.angle)*.1;
+            let s=Math.hypot(this.vx,this.vy); if(s>2){this.vx*=0.9;this.vy*=0.9;} super.update();
+            if(this.x<-100)this.x=W+100; if(this.x>W+100)this.x=-100; if(this.y<-100)this.y=H+100; if(this.y>H+100)this.y=-100; return;
+        }
+        let target=null;
+        if(this.canShoot){
+            this.shootTimer--;
+            if(this.shootTimer<=0){
+                let pTarget=null,minD=600;
+                players.forEach(p=>{if(p.respawnTimer>0||p.dead)return;let d=Math.hypot(p.x-this.x,p.y-this.y);if(d<minD){minD=d;pTarget=p;}});
+                if(pTarget){bullets.push(new Bullet(this.x,this.y,Math.atan2(pTarget.y-this.y,pTarget.x-this.x),"#ff0",true)); sfx.enemyLaser(); this.shootTimer=120+Math.random()*100;} else this.shootTimer=60;
+            }
+        }
+        if(this.carrying){
+            if(!this.carrying.captured)this.carrying=null;
+            else{
+                let hX=this.x-Math.cos(this.angle)*20, hY=this.y-Math.sin(this.angle)*20;
+                let tA=Math.atan2(hY-this.carrying.y,hX-this.carrying.x);
+                this.carrying.x=hX-Math.cos(tA)*35; this.carrying.y=hY-Math.sin(tA)*35; this.carrying.angle=tA; this.carrying.vx=0; this.carrying.vy=0;
+            }
+        }
+        if(this.type==='hunter'){
+            let minD=Infinity; players.forEach(p=>{if(p.respawnTimer>0||p.dead)return;let d=Math.hypot(p.x-this.x,p.y-this.y);if(d<minD){minD=d;target=p;}});
+            if(target){
+                let a = Math.atan2(target.y-this.y, target.x-this.x);
+                // ADAPTIVE AI: FLANKING
+                if(tacticalMode) {
+                    // Even ID flanks Left, Odd flanks Right
+                    let flankOffset = (this.spawnId % 2 === 0 ? 0.6 : -0.6);
+                    // Fade offset as we get closer (commit to ram)
+                    let dist = Math.hypot(target.x-this.x, target.y-this.y);
+                    if(dist > 150) a += flankOffset;
+                }
+                this.angle=a; this.vx+=Math.cos(a)*0.12*this.speedMod; this.vy+=Math.sin(a)*0.12*this.speedMod;
+            } else {this.vx+=(Math.random()-.5)*.2;this.vy+=(Math.random()-.5)*.2;}
+        } else {
+            if(this.carrying){
+                let eA=Math.atan2(H/2-this.y,W/2-this.x)+Math.PI; this.angle=eA; this.vx+=Math.cos(eA)*0.07*this.speedMod; this.vy+=Math.sin(eA)*0.07*this.speedMod;
+                if(this.x<-100||this.x>W+100||this.y<-100||this.y>H+100){this.dead=true;if(this.carrying)this.carrying.dead=true;}
+            } else {
+                let minD=Infinity; fuels.forEach(f=>{if(f.dead||f.captured)return;let d=Math.hypot(f.x-this.x,f.y-this.y);if(d<minD){minD=d;target=f;}});
+                if(target){
+                    let a=Math.atan2(target.y-this.y,target.x-this.x);
+                    let d=a-this.angle; d=(d+Math.PI)%(2*Math.PI)-Math.PI; if(d<-Math.PI)d+=2*Math.PI; this.angle+=d*0.1;
+                    this.vx+=Math.cos(this.angle)*0.08*this.speedMod; this.vy+=Math.sin(this.angle)*0.08*this.speedMod;
+                    if(Math.hypot(this.x-target.x,this.y-target.y)<30){this.carrying=target;target.captured=true;}
+                } else this.type='hunter';
+            }
+        }
+        enemies.forEach(e=>{if(e!==this&&Math.hypot(this.x-e.x,this.y-e.y)<40){let a=Math.atan2(this.y-e.y,this.x-e.x);this.vx+=Math.cos(a)*0.1;this.vy+=Math.sin(a)*0.1;}});
+        let s=Math.hypot(this.vx,this.vy); let max=(this.carrying?1.5:(this.type==='hunter'?3.5:(this.type==='dash'?3.0:2.2)))*this.speedMod; if(s>max){this.vx=(this.vx/s)*max;this.vy=(this.vy/s)*max;}
+        super.update();
+    }
+    draw() {
+        ctx.strokeStyle=this.color; ctx.lineWidth=2; ctx.shadowBlur=10; ctx.shadowColor=this.color;
+        if(this.carrying){ctx.beginPath();ctx.moveTo(this.x-Math.cos(this.angle)*15,this.y-Math.sin(this.angle)*15);ctx.lineTo(this.carrying.x,this.carrying.y);ctx.stroke();}
+        if(this.type==='hunter'){this.drawShape(SHAPES.hunterBody);this.drawShape(SHAPES.hunterWing);}else{this.drawShape(SHAPES.tankBody);this.drawShape(SHAPES.tankTreadL);this.drawShape(SHAPES.tankTreadR);this.drawShape(SHAPES.tankTurret,false);}
+        ctx.shadowBlur=0;
+    }
+}
+
+class Bullet extends Entity { constructor(x,y,a,c,e){super(x,y,c);this.isEnemy=e;let s=e?6:14;this.vx=Math.cos(a)*s;this.vy=Math.sin(a)*s;this.life=e?90:45;} draw(){ctx.fillStyle=this.color;ctx.shadowBlur=5;ctx.shadowColor=this.color;ctx.fillRect(this.x-2,this.y-2,4,4);ctx.shadowBlur=0;} update(){super.update();this.life--;if(this.life<=0)this.dead=true;} }
+
+function drawGrid() { ctx.strokeStyle="#111"; ctx.lineWidth=1; let ox=players[0]?-players[0].x*0.1:0, oy=players[0]?-players[0].y*0.1:0; ctx.beginPath(); for(let x=ox%100;x<W;x+=100){ctx.moveTo(x,0);ctx.lineTo(x,H);} for(let y=oy%100;y<H;y+=100){ctx.moveTo(0,y);ctx.lineTo(W,y);} ctx.stroke(); }
+
+function loop() {
+    requestAnimationFrame(loop);
+    if(gamePaused && !cutsceneActive) return;
+
+    // Dispatch to appropriate scene loop
+    if (currentScene === SCENE_TYPE.LUNAR_LANDER) {
+        llLoop();
+        return;
+    }
+
+    // Original Rip Off loop below
+    ctx.fillStyle="rgba(5,5,5,0.6)"; ctx.fillRect(0,0,W,H);
+    if(screenShake>0){ctx.save();ctx.translate((Math.random()-.5)*screenShake,(Math.random()-.5)*screenShake);screenShake*=0.9;if(screenShake<0.5)screenShake=0;}
+    drawGrid();
+    fuels.forEach(f=>{f.update();f.draw();}); powerups.forEach(p=>{p.update();p.draw();}); popups.forEach(p=>{p.update();p.draw();}); popups=popups.filter(p=>p.life>0);
+
+    if(attractMode){enemies.forEach(e=>{e.update();e.draw();});if(screenShake>0)ctx.restore();return;}
+    if(!activeGame){if(screenShake>0)ctx.restore();return;}
+
+    pollGamepads();
+    let active=enemies.filter(e=>!e.dead);
+    if(waveQueue.length>0){spawnTimer--;if(spawnTimer<=0){enemies.push(new Enemy(waveQueue.shift()));spawnTimer=60+Math.random()*60;}}
+    else if(active.length===0){if(roundDelayTimer>0)roundDelayTimer--;else{round++;if(round<4){roundDelayTimer=120;loadRound();}else{wave++;startWave();}}}
+
+    document.getElementById("ui-score").innerText=score;
+    let activeFuel=fuels.filter(f=>!f.dead); document.getElementById("ui-fuel").innerText=activeFuel.length;
+    if(activeFuel.length===0){gameOver("FUEL DEPLETED");if(screenShake>0)ctx.restore();return;}
+
+    players.forEach(p=>{p.update();p.draw(); powerups.forEach(pu=>{if(!pu.dead&&!p.dead&&Math.hypot(pu.x-p.x,pu.y-p.y)<30){pu.dead=true;p.shieldTimer=900;sfx.powerUp();}}); if(p.shieldTimer>0){fuels.forEach(f=>{if(!f.captured&&!f.dead){let dx=f.x-p.x,dy=f.y-p.y;if(Math.hypot(dx,dy)<40){let a=Math.atan2(dy,dx);f.vx+=Math.cos(a)*3;f.vy+=Math.sin(a)*3;f.x+=Math.cos(a)*2;f.y+=Math.sin(a)*2;}}});} }); powerups=powerups.filter(p=>!p.dead);
+
+    bullets.forEach(b=>{
+        b.update();b.draw();
+        if(b.isEnemy)players.forEach(p=>{if(p.respawnTimer===0&&!p.dead&&p.shieldTimer<=0&&Math.hypot(b.x-p.x,b.y-p.y)<15){p.die();b.dead=true;}else if(p.shieldTimer>0&&Math.hypot(b.x-p.x,b.y-p.y)<25)b.dead=true;});
+        else enemies.forEach(e=>{if(Math.hypot(b.x-e.x,b.y-e.y)<30){e.dead=true;b.dead=true; let pts=e.type==='hunter'?250:(e.type==='dash'?150:100); addScore(pts); popups.push(new FloatingText(e.x,e.y,pts,"#fff")); sfx.explosion(); screenShake=5; createExplosion(e.x,e.y,e.color,15); if(e.carrying){e.carrying.captured=false;e.carrying.vx=e.vx;e.carrying.vy=e.vy;} if(Math.random()<0.1)powerups.push(new PowerUp(e.x,e.y)); }});
+    });
+    bullets=bullets.filter(b=>!b.dead);
+
+    enemies.forEach(e=>{
+        e.update();e.draw();
+        players.forEach(p=>{if(p.respawnTimer===0&&!p.dead&&Math.hypot(p.x-e.x,p.y-e.y)<30){if(p.shieldTimer>0){e.dead=true;sfx.explosion();createExplosion(e.x,e.y,e.color,20);if(e.carrying){e.carrying.captured=false;e.carrying.vx=0;e.carrying.vy=0;}}else{e.dead=true;p.die();createExplosion(e.x,e.y,e.color,20);if(e.carrying)e.carrying.captured=false;}}});
+    });
+    enemies=enemies.filter(e=>!e.dead);
+    particles.forEach(p=>{p.update();p.draw();}); particles=particles.filter(p=>p.life>0);
+    if(screenShake>0)ctx.restore();
+}
+
+function addScore(pts){ score+=pts; if(score>=nextLifeScore){lives++;nextLifeScore+=5000;sfx.oneUp();drawLivesUI();} }
+
+// --- HIGH SCORES SYSTEM ---
+function getTopScore() {
+    return highScores.length > 0 ? highScores[0].score : 0;
+}
+
+function updateHighScoreUI() {
+    let top = getTopScore();
+    document.getElementById('menu-high-score').innerText = top;
+    document.getElementById('ui-high-score').innerText = top;
+}
+
+function isHighScore(s) {
+    if(s <= 0) return false;
+    if(highScores.length < MAX_HIGH_SCORES) return true;
+    return s > highScores[highScores.length - 1].score;
+}
+
+function addHighScore(name, s) {
+    highScores.push({ name: name.toUpperCase(), score: s });
+    highScores.sort((a, b) => b.score - a.score);
+    if(highScores.length > MAX_HIGH_SCORES) highScores = highScores.slice(0, MAX_HIGH_SCORES);
+    localStorage.setItem('harvestHighScores', JSON.stringify(highScores));
+    updateHighScoreUI();
+}
+
+function renderHighScores(highlightScore) {
+    const tbody = document.getElementById('scores-body');
+    tbody.innerHTML = '';
+    if(highScores.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="3" style="text-align:center;color:#666;padding:40px;">NO SCORES YET</td></tr>';
+        return;
+    }
+    highScores.forEach((entry, i) => {
+        const tr = document.createElement('tr');
+        if(highlightScore && entry.score === highlightScore) tr.classList.add('highlight');
+        tr.innerHTML = `<td class="rank">${i + 1}</td><td class="name">${entry.name}</td><td class="score-val">${entry.score}</td>`;
+        tbody.appendChild(tr);
+    });
+}
+
+function submitHighScore() {
+    let name = document.getElementById('name-input').value.trim() || 'AAA';
+    addHighScore(name, pendingScore);
+    document.getElementById('name-entry-screen').style.display = 'none';
+    renderHighScores(pendingScore);
+    document.getElementById('highscores-screen').style.display = 'flex';
+}
+
+// Handle Enter key on name input
+document.getElementById('name-input').addEventListener('keydown', (e) => {
+    if(e.key === 'Enter') submitHighScore();
+});
+
+updateHighScoreUI();
+startAttractMode();
+loop();
+</script>
+</body>
+</html>

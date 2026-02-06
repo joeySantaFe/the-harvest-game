@@ -1,0 +1,201 @@
+THE HARVEST — Project Overview
+==============================
+
+WHAT IT IS
+----------
+"The Harvest" is a browser-based retro arcade game anthology — a single narrative
+experience told across three playable acts, each inspired by a classic 1980s arcade
+game. It's designed to look and feel like a glowing green-phosphor terminal from a
+sci-fi colony ship, complete with CRT scanline effects and procedural audio.
+
+The player is a colonist who has arrived at a distant world. Fuel is the central
+resource — it's scarce, shared across all three acts, and every decision about it
+matters. Waste fuel in Act I and you'll have fewer lives in Act II.
+
+
+THE NARRATIVE
+-------------
+The story unfolds through brief interstitial screens between acts:
+
+ACT I — THE DESCENT (Lunar Lander)
+  The colony ships have arrived in orbit. The player's mission is to descend to the
+  surface, locate ancient fuel depots, and establish a forward command base. Fuel is
+  scarce and must be conserved for the harvest season ahead.
+
+  Gameplay: Physics-based lunar landing. The player pilots a lander through procedural
+  terrain, managing thrust and rotation to touch down softly on landing pads near fuel
+  depots. Higher-difficulty pads yield more points. The ship takes damage from hard
+  landings. After landing, the ship refuels and must lift off to reach the next depot.
+
+ACT II — THE HARVEST (Rip Off)
+  Base is secured. But movement is detected on the surface — autonomous mechanical
+  collection units are emerging from subsurface structures and moving toward the
+  colony's fuel reserves. All hands to defensive positions.
+
+  Gameplay: Top-down arcade defense. The player controls a nimble ship defending fuel
+  cells scattered across the screen from waves of enemies. Fuel remaining from Act I
+  converts to bonus lives (150 fuel = 1 extra life, max 4 bonus). The game runs through
+  3 waves of 4 rounds each, then continues with procedurally scaling difficulty.
+
+  Three enemy types:
+    - HARVESTER (red): Seeks fuel cells, attaches to them, and drags them toward the
+      screen edge. Shielded from frontal attacks. Flees erratically when hit.
+    - SPRINTER (orange): An armed tank with a turret that independently tracks players.
+      Patrols the center area with a sweeping turret, then locks on and fires when a
+      player enters range. Moves forward only, like a real tank.
+    - EXTERMINATOR (purple): Aggressive ramming ship. Charges directly at players.
+      Flanks from alternating sides. No ranged weapons — pure aggression.
+
+  Power-ups:
+    - SHIELD (cyan): Dropped by destroyed enemies. Grants 15 seconds of invulnerability.
+      While shielded, the player can ram enemies to destroy them and push fuel cells
+      back toward safety.
+
+  The wave structure introduces enemy types gradually:
+    Wave 1: Harvesters only (learning the core mechanic)
+    Wave 2: Harvesters + Exterminators (adding melee pressure)
+    Wave 3: All three types (full chaos)
+    Wave 4+: Procedurally scaled — more enemies, faster speeds
+
+ACT III — THE BATTLE (Battlezone) [NOT YET BUILT]
+  The swarm has been neutralized. But deep beneath the surface, something stirs.
+  The true conflict is yet to begin.
+
+  Planned gameplay: First-person vector combat inspired by Battlezone. The player
+  navigates 3D wireframe battlefields and faces "ancient guardians" — whatever those
+  turn out to be. This act exists only as a placeholder screen with "Coming Soon" text.
+  The player can currently skip it to reach the victory screen.
+
+VICTORY
+  "The harvest has been defended. The mechanical swarm has been neutralized.
+   The colony survives another day."
+  Displays final fuel and score.
+
+
+VISUAL STYLE
+------------
+- Black background with green (#0f0), cyan (#0af), gold (#fd0), and red (#f04) accents
+- Monospace font throughout — everything looks like a terminal readout
+- CRT scanline overlay effect on the entire screen
+- Canvas-rendered gameplay with vector-style graphics (lines, triangles, circles)
+- Glowing text effects with animated pulsing
+- Act thumbnails on the menu are miniature canvas-rendered scenes showing representative
+  gameplay from each act
+- The menu has an animated background with blurred, out-of-focus game entities drifting
+  slowly across the screen
+
+
+AUDIO
+-----
+- Two music tracks: one ambient for menus, one more intense for gameplay
+- Music crossfades when transitioning between menu and game states
+- Music pauses when the game is paused (ESC key)
+- Procedural thruster sound (brown noise through a lowpass filter) for Act I
+- Sound effects for landing, refueling, and ambient hum in Act I
+- Act II has procedural laser/explosion sounds via Web Audio API oscillators
+
+
+GAME STRUCTURE & FLOW
+---------------------
+The app is a state machine:
+
+  MENU --> NARRATIVE (Act I intro) --> ACT I: THE DESCENT
+       --> NARRATIVE (Act II intro) --> ACT II: THE HARVEST
+       --> ACT III: THE BATTLE --> VICTORY
+
+  At any point, failure sends the player to GAME OVER (high score entry if qualified).
+
+Menu features:
+  - Title: "THE HARVEST" in large glowing green text
+  - High score display
+  - Three act thumbnail cards (locked acts are dimmed with a lock icon)
+  - "Archives" button (help/controls reference)
+  - "Records" button (high score table)
+  - "Reset Act Progress" link (appears when acts are unlocked)
+
+Act unlock system:
+  - Act 1 is always available
+  - Act 2 unlocks after completing Act 1
+  - Act 3 unlocks after completing Act 2
+  - Unlocks persist in browser storage between sessions
+
+Debug mode (hold Option/Alt key):
+  - All act thumbnails appear unlocked
+  - Option+click any thumbnail to jump directly to that act
+  - Option+R resets all act progress
+
+
+CONTROLS
+--------
+Player 1:
+  W or Up Arrow — Thrust
+  A/D or Left/Right Arrows — Rotate
+  Space — Fire (Act II)
+  Mouse click — Fire (Act II, Player 1 only)
+  ESC — Pause
+
+Player 2 (co-op, Act II only):
+  Arrow Up — Thrust
+  Arrow Left/Right — Rotate
+  Numpad 0 — Fire
+
+Gamepad support is also implemented for both players.
+
+
+THE FUEL ECONOMY
+----------------
+Fuel is THE central mechanic that ties all three acts together:
+
+  Starting fuel: 600
+  Fuel-to-lives ratio: 150 fuel = 1 bonus life (max 4 bonus lives)
+  Base lives in Act II: 3
+
+So a player who conserves fuel in Act I (say, ending with 500) gets 3 bonus lives
+in Act II (3 base + 3 bonus = 6 total lives). A player who wastes fuel (ending with
+100) only gets 0 bonus lives (3 base + 0 = 3 total lives).
+
+This creates meaningful tension in Act I — every unnecessary thrust costs lives later.
+
+
+CO-OP
+-----
+Act II supports 2-player co-op on the same screen. When 2 players are active, enemy
+count scales by 1.5x. Players share the fuel pool and the fate of the colony.
+
+
+CURRENT STATE (as of v1.2.1, February 2026)
+--------------------------------------------
+COMPLETE:
+  - Act I: The Descent — Fully playable lunar lander with physics, terrain, fuel depots
+  - Act II: The Harvest — Fully playable defense game with 3 enemy types, waves, co-op
+  - Menu system with thumbnails, unlock progression, high scores
+  - Music and sound effects
+  - Campaign state (fuel, score, hull) carries between acts
+
+NOT YET BUILT:
+  - Act III: The Battle — Currently just a placeholder "Coming Soon" screen
+    - Intended to be first-person wireframe vector combat (Battlezone-inspired)
+    - Would feature 3D perspective rendering on a 2D canvas
+    - Narrative mentions "ancient guardians" beneath the surface
+    - No design document or detailed spec exists yet
+
+
+INSPIRATIONS
+------------
+  - Lunar Lander (Atari, 1979) — Act I
+  - Rip Off (Cinematronics, 1980) — Act II
+  - Battlezone (Atari, 1980) — Act III (planned)
+  - General aesthetic: early vector arcade games, green phosphor monitors, Alien (1979)
+    computer interfaces, sci-fi colony narratives
+
+
+TONE
+----
+Serious but spare. The narrative text is terse and functional — like mission briefings
+from a colony computer. No humor, no personality in the writing — just information.
+The drama comes from the situation itself: you're alone on an alien surface, fuel is
+running out, and something mechanical is coming for what little you have left.
+
+The word "harvest" has a double meaning:
+  1. The colony's harvest season (gathering fuel to survive)
+  2. The machines harvesting/stealing the colony's fuel reserves
