@@ -1,11 +1,13 @@
 // Music track identifiers
-export type MusicTrack = 'menu' | 'gameplay' | null;
+export type MusicTrack = 'menu' | 'act1' | 'act2' | 'act3' | null;
 
 // Map track names to file paths (use Vite's BASE_URL for GitHub Pages compatibility)
 const base = import.meta.env.BASE_URL;
 const MUSIC_TRACKS: Record<Exclude<MusicTrack, null>, string> = {
   menu: `${base}music/Deep_Space_Flow.mp3`,
-  gameplay: `${base}music/Pixelated_Cosmos.mp3`,
+  act1: `${base}music/Pixelated_Cosmos.mp3`,
+  act2: `${base}music/Deep_Space_Flow.mp3`,
+  act3: `${base}music/Pixelated_Cosmos.mp3`,
 };
 
 // Sound effect paths

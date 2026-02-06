@@ -109,12 +109,15 @@ const App: React.FC = () => {
     const handleActClick = (act: ActInfo, event: React.MouseEvent) => {
         const unlocked = isActUnlocked(act.actNumber);
 
+        // Map act number to music track
+        const actTrack = { 1: 'act1', 2: 'act2', 3: 'act3' } as const;
+
         // Option/Alt key = debug mode, can jump to any act
         if (event.altKey) {
             setCampaignFuel(INITIAL_FUEL);
             setCampaignScore(0);
             setCampaignHull(100);
-            audioService.playMusic('gameplay'); // Start in gesture context (autoplay policy)
+            audioService.playMusic(actTrack[act.actNumber]);
             setAppState(act.appState);
             return;
         }
@@ -126,7 +129,7 @@ const App: React.FC = () => {
         setCampaignFuel(INITIAL_FUEL);
         setCampaignScore(0);
         setCampaignHull(100);
-        audioService.playMusic('gameplay'); // Start in gesture context (autoplay policy)
+        audioService.playMusic(actTrack[act.actNumber]);
         setAppState(act.appState);
     };
 
@@ -141,16 +144,16 @@ const App: React.FC = () => {
             AppState.VICTORY,
         ];
 
-        const gameplayStates = [
-            AppState.ACT_1_LANDER,
-            AppState.ACT_2_HARVEST,
-            AppState.ACT_3_BATTLE,
-        ];
+        const stateToTrack: Partial<Record<AppState, 'act1' | 'act2' | 'act3'>> = {
+            [AppState.ACT_1_LANDER]: 'act1',
+            [AppState.ACT_2_HARVEST]: 'act2',
+            [AppState.ACT_3_BATTLE]: 'act3',
+        };
 
         if (menuStates.includes(appState)) {
             audioService.playMusic('menu');
-        } else if (gameplayStates.includes(appState)) {
-            audioService.playMusic('gameplay');
+        } else if (stateToTrack[appState]) {
+            audioService.playMusic(stateToTrack[appState]!);
         }
     }, [appState]);
 
