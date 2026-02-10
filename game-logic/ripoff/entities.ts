@@ -26,6 +26,7 @@ import {
   TANK_FORWARD_FRICTION
 } from '../../constants';
 import { wrapEntity, applyTankPhysics } from './physics';
+import { getAIConfig } from './aiConfig';
 
 // --- Player Factories ---
 
@@ -76,8 +77,7 @@ export function updatePlayer(
   }
 
   // Apply tank physics (no sideways drift)
-  const maxSpeed = 6; // Player max speed
-  applyTankPhysics(player, maxSpeed, TANK_SIDEWAYS_FRICTION, TANK_FORWARD_FRICTION);
+  applyTankPhysics(player, getAIConfig().playerMaxSpeed, TANK_SIDEWAYS_FRICTION, TANK_FORWARD_FRICTION);
 
   // Update tread offset based on forward speed component
   const facingX = Math.cos(player.angle);
@@ -103,7 +103,7 @@ export function updatePlayer(
 export function firePlayerBullet(player: RipOffPlayer): RipOffBullet | null {
   if (player.shootCooldown > 0 || player.dead) return null;
 
-  player.shootCooldown = 10; // v28: cooldown=10 frames
+  player.shootCooldown = getAIConfig().playerShootCooldown;
 
   // Apply recoil (v28: 0.5)
   player.vx -= Math.cos(player.angle) * RIPOFF_RECOIL;
@@ -143,7 +143,7 @@ export function createEnemy(
     color: ENEMY_COLORS[type],
     dead: false,
     aiState: 'pursuit',
-    shootCooldown: type === 'sprinter' ? Math.random() * 100 + 120 : 0,
+    shootCooldown: type === 'sprinter' ? Math.random() * getAIConfig().sprinter.shootCooldownRange + getAIConfig().sprinter.shootCooldownMin : 0,
     targetId: null,
     dragTarget: null,
     stateTimer: 0,
@@ -187,6 +187,7 @@ export function fireEnemyBullet(
   height: number
 ): RipOffBullet | null {
   if (enemy.type !== 'sprinter' || enemy.shootCooldown > 0 || enemy.dead) return null;
+  if (getAIConfig().sprinter.disableShooting) return null;
 
   // Only shoot if actively tracking a player
   if (!enemy.isTracking) return null;
@@ -198,7 +199,8 @@ export function fireEnemyBullet(
     return null;
   }
 
-  enemy.shootCooldown = Math.random() * 80 + 100; // 1.7-3 seconds
+  const sprCfg = getAIConfig().sprinter;
+  enemy.shootCooldown = Math.random() * sprCfg.shootCooldownRange + sprCfg.shootCooldownMin;
 
   // Fire in turret direction (turret is already tracking the player)
   return {

@@ -1,7 +1,6 @@
 import React, { useEffect, useRef, useState, useCallback } from 'react';
 import { GameActProps, RipOffState, RipOffPlayer, RipOffEnemy, RipOffBullet, RipOffFuel, RipOffPowerUp, RipOffParticle, PopupText } from '../types';
 import {
-  RIPOFF_SHAPES,
   SHIELD_DURATION,
   EXTRA_LIFE_SCORE,
   ENEMY_SCORES,
@@ -51,6 +50,17 @@ import {
   generateSpawnPositions,
   createEnemyQueue
 } from '../game-logic/ripoff/waves';
+import {
+  drawGrid as drawGridBase,
+  drawShape as drawShapeBase,
+  drawTank as drawTankBase,
+  drawBuggy as drawBuggyBase,
+  drawBullet,
+  drawFuel as drawFuelBase,
+  drawPowerUp as drawPowerUpBase,
+  drawParticle,
+  drawPopup
+} from '../game-logic/ripoff/rendering';
 
 interface RipOffGameProps extends GameActProps {
   playerCount: number;
@@ -641,192 +651,27 @@ const RipOffGame: React.FC<RipOffGameProps> = ({
     ctx.setTransform(1, 0, 0, 1, 0, 0);
   }, []);
 
-  // Drawing functions
+  // Drawing helper wrappers — delegate to extracted rendering.ts with canvas dimensions
   const drawGrid = (ctx: CanvasRenderingContext2D, width: number, height: number) => {
-    ctx.strokeStyle = '#111';
-    ctx.lineWidth = 1;
-
-    // Parallax offset based on player position
     const player = playersRef.current[0];
     const ox = player ? -player.x * 0.1 : 0;
     const oy = player ? -player.y * 0.1 : 0;
-
-    const gridSize = 100;
-    ctx.beginPath();
-    for (let x = ox % gridSize; x < width; x += gridSize) {
-      ctx.moveTo(x, 0);
-      ctx.lineTo(x, height);
-    }
-    for (let y = oy % gridSize; y < height; y += gridSize) {
-      ctx.moveTo(0, y);
-      ctx.lineTo(width, y);
-    }
-    ctx.stroke();
+    drawGridBase(ctx, width, height, ox, oy);
   };
 
   const drawShape = (ctx: CanvasRenderingContext2D, x: number, y: number, angle: number, shape: number[][], color: string) => {
-    // Validate inputs to prevent rendering bugs
-    if (!isFinite(x) || !isFinite(y) || !isFinite(angle)) {
-      return;
-    }
-
-    // Skip if position is way off-screen
     const canvas = canvasRef.current;
-    if (canvas) {
-      const margin = 150;
-      if (x < -margin || x > canvas.width + margin || y < -margin || y > canvas.height + margin) {
-        return;
-      }
-    }
-
-    ctx.save();
-    ctx.translate(x, y);
-    ctx.rotate(angle);
-    ctx.strokeStyle = color;
-    ctx.lineWidth = 2;
-
-    ctx.beginPath();
-    for (let i = 0; i < shape.length; i++) {
-      const [sx, sy] = shape[i];
-      if (i === 0) ctx.moveTo(sx, sy);
-      else ctx.lineTo(sx, sy);
-    }
-    ctx.closePath();
-    ctx.stroke();
-
-    ctx.restore();
+    drawShapeBase(ctx, x, y, angle, shape, color, canvas?.width || 0, canvas?.height || 0);
   };
 
-  const drawTank = (
-    ctx: CanvasRenderingContext2D,
-    x: number, y: number,
-    angle: number,
-    turretAngle: number,
-    treadOffset: number,
-    color: string
-  ) => {
-    if (!isFinite(x) || !isFinite(y) || !isFinite(angle)) return;
+  const drawTank = (ctx: CanvasRenderingContext2D, x: number, y: number, angle: number, turretAngle: number, treadOffset: number, color: string) => {
     const canvas = canvasRef.current;
-    if (canvas) {
-      const margin = 150;
-      if (x < -margin || x > canvas.width + margin || y < -margin || y > canvas.height + margin) return;
-    }
-
-    ctx.save();
-    ctx.translate(x, y);
-    ctx.rotate(angle);
-
-    // Draw treads with animated dashed lines
-    ctx.strokeStyle = color;
-    ctx.lineWidth = 2;
-
-    // Left tread outline
-    ctx.beginPath();
-    ctx.moveTo(14, 8); ctx.lineTo(14, 12); ctx.lineTo(-14, 12); ctx.lineTo(-14, 8);
-    ctx.stroke();
-
-    // Right tread outline
-    ctx.beginPath();
-    ctx.moveTo(14, -8); ctx.lineTo(14, -12); ctx.lineTo(-14, -12); ctx.lineTo(-14, -8);
-    ctx.stroke();
-
-    // Animated tread dashes (left tread)
-    ctx.setLineDash([4, 4]);
-    ctx.lineDashOffset = -treadOffset;
-    ctx.beginPath();
-    ctx.moveTo(14, 10);
-    ctx.lineTo(-14, 10);
-    ctx.stroke();
-
-    // Animated tread dashes (right tread)
-    ctx.beginPath();
-    ctx.moveTo(14, -10);
-    ctx.lineTo(-14, -10);
-    ctx.stroke();
-
-    ctx.setLineDash([]);
-
-    // Draw tank body
-    ctx.beginPath();
-    ctx.moveTo(12, 8); ctx.lineTo(12, -8); ctx.lineTo(-12, -8); ctx.lineTo(-12, 8);
-    ctx.closePath();
-    ctx.stroke();
-
-    ctx.restore();
-
-    // Draw turret (separate rotation)
-    ctx.save();
-    ctx.translate(x, y);
-    ctx.rotate(turretAngle);
-    ctx.strokeStyle = color;
-    ctx.lineWidth = 3;
-    ctx.beginPath();
-    ctx.moveTo(0, 0);
-    ctx.lineTo(20, 0);
-    ctx.stroke();
-    // Turret base circle
-    ctx.lineWidth = 2;
-    ctx.beginPath();
-    ctx.arc(0, 0, 4, 0, Math.PI * 2);
-    ctx.stroke();
-    ctx.restore();
+    drawTankBase(ctx, x, y, angle, turretAngle, treadOffset, color, canvas?.width || 0, canvas?.height || 0);
   };
 
-  const drawBuggy = (
-    ctx: CanvasRenderingContext2D,
-    x: number, y: number,
-    angle: number,
-    treadOffset: number,
-    color: string
-  ) => {
-    if (!isFinite(x) || !isFinite(y) || !isFinite(angle)) return;
+  const drawBuggy = (ctx: CanvasRenderingContext2D, x: number, y: number, angle: number, treadOffset: number, color: string) => {
     const canvas = canvasRef.current;
-    if (canvas) {
-      const margin = 150;
-      if (x < -margin || x > canvas.width + margin || y < -margin || y > canvas.height + margin) return;
-    }
-
-    ctx.save();
-    ctx.translate(x, y);
-    ctx.rotate(angle);
-
-    ctx.strokeStyle = color;
-    ctx.lineWidth = 2;
-
-    // Draw body (smaller rectangle)
-    ctx.beginPath();
-    ctx.moveTo(10, 6); ctx.lineTo(10, -6); ctx.lineTo(-10, -6); ctx.lineTo(-10, 6);
-    ctx.closePath();
-    ctx.stroke();
-
-    // Draw front bumper bar
-    ctx.lineWidth = 3;
-    ctx.beginPath();
-    ctx.moveTo(12, -5);
-    ctx.lineTo(12, 5);
-    ctx.stroke();
-
-    // Draw 4 wheels as small circles with rotating line
-    ctx.lineWidth = 2;
-    const wheelPositions = [
-      { x: 10, y: -7 },   // Front-left
-      { x: 10, y: 7 },    // Front-right
-      { x: -10, y: -7 },  // Back-left
-      { x: -10, y: 7 }    // Back-right
-    ];
-    for (const wp of wheelPositions) {
-      ctx.beginPath();
-      ctx.arc(wp.x, wp.y, 3, 0, Math.PI * 2);
-      ctx.stroke();
-      // Rotating spoke inside wheel
-      const spokeAngle = treadOffset * 0.3;
-      ctx.beginPath();
-      ctx.moveTo(wp.x + Math.cos(spokeAngle) * 2.5, wp.y + Math.sin(spokeAngle) * 2.5);
-      ctx.lineTo(wp.x - Math.cos(spokeAngle) * 2.5, wp.y - Math.sin(spokeAngle) * 2.5);
-      ctx.stroke();
-    }
-
-    ctx.restore();
+    drawBuggyBase(ctx, x, y, angle, treadOffset, color, canvas?.width || 0, canvas?.height || 0);
   };
 
   const drawPlayer = (ctx: CanvasRenderingContext2D, player: RipOffPlayer) => {
@@ -919,66 +764,13 @@ const RipOffGame: React.FC<RipOffGameProps> = ({
     }
   };
 
-  const drawBullet = (ctx: CanvasRenderingContext2D, bullet: RipOffBullet) => {
-    const color = bullet.ownerId === 'enemy' ? '#f80' : '#0f0';
-    ctx.fillStyle = color;
-    ctx.beginPath();
-    ctx.arc(bullet.x, bullet.y, 3, 0, Math.PI * 2);
-    ctx.fill();
-  };
-
   const drawFuel = (ctx: CanvasRenderingContext2D, fuel: RipOffFuel) => {
-    if (fuel.dead) return;
-    drawShape(ctx, fuel.x, fuel.y, 0, RIPOFF_SHAPES.fuel, '#0af');
+    const canvas = canvasRef.current;
+    drawFuelBase(ctx, fuel, canvas?.width || 0, canvas?.height || 0);
   };
 
   const drawPowerUp = (ctx: CanvasRenderingContext2D, powerup: RipOffPowerUp) => {
-    // Blinking when about to expire
-    if (powerup.life < 100 && Math.floor(powerup.life / 10) % 2 === 0) {
-      return;
-    }
-
-    const pulse = Math.sin(Date.now() / 100) * 0.3 + 1;
-    const spinAngle = Date.now() / 200; // Spinning effect
-
-    ctx.save();
-    ctx.translate(powerup.x, powerup.y);
-    ctx.rotate(spinAngle);
-    ctx.scale(pulse, pulse);
-    ctx.strokeStyle = '#0ff';
-    ctx.lineWidth = 2;
-    ctx.shadowBlur = 8;
-    ctx.shadowColor = '#0ff';
-    ctx.beginPath();
-    for (let i = 0; i < RIPOFF_SHAPES.powerup.length; i++) {
-      const [sx, sy] = RIPOFF_SHAPES.powerup[i];
-      if (i === 0) ctx.moveTo(sx, sy);
-      else ctx.lineTo(sx, sy);
-    }
-    ctx.closePath();
-    ctx.stroke();
-    ctx.shadowBlur = 0;
-    ctx.restore();
-  };
-
-  const drawParticle = (ctx: CanvasRenderingContext2D, particle: RipOffParticle) => {
-    const alpha = particle.life / particle.maxLife;
-    ctx.fillStyle = particle.color;
-    ctx.globalAlpha = alpha;
-    ctx.beginPath();
-    ctx.arc(particle.x, particle.y, 2, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.globalAlpha = 1;
-  };
-
-  const drawPopup = (ctx: CanvasRenderingContext2D, popup: PopupText) => {
-    const alpha = popup.life / 60;
-    ctx.fillStyle = popup.color;
-    ctx.globalAlpha = alpha;
-    ctx.font = 'bold 16px monospace';
-    ctx.textAlign = 'center';
-    ctx.fillText(popup.text, popup.x, popup.y);
-    ctx.globalAlpha = 1;
+    drawPowerUpBase(ctx, powerup, Date.now());
   };
 
   // Game loop

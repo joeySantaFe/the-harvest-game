@@ -1,6 +1,7 @@
 import { RipOffEnemy, RipOffPlayer, RipOffFuel } from '../../types';
 import { ENEMY_SPEEDS, ENEMY_CARRY_SPEED, KITING_THRESHOLD, TACTICAL_TIMEOUT } from '../../constants';
 import { angleTo, distance, getNearestWrappedPosition, applyTankPhysics } from './physics';
+import { getAIConfig } from './aiConfig';
 
 let kitingCounter = 0;
 let tacticalMode = false;
@@ -38,13 +39,14 @@ export function updateEnemyAI(
 
   // Enemy separation - push away from other enemies
   if (allEnemies) {
+    const cfg = getAIConfig();
     for (const other of allEnemies) {
       if (other === enemy || other.dead) continue;
       const dist = distance(enemy.x, enemy.y, other.x, other.y);
-      if (dist < 40 && dist > 0) {
+      if (dist < cfg.separationDistance && dist > 0) {
         const pushAngle = angleTo(other.x, other.y, enemy.x, enemy.y);
-        enemy.vx += Math.cos(pushAngle) * 0.1;
-        enemy.vy += Math.sin(pushAngle) * 0.1;
+        enemy.vx += Math.cos(pushAngle) * cfg.separationForce;
+        enemy.vy += Math.sin(pushAngle) * cfg.separationForce;
       }
     }
   }
@@ -59,6 +61,7 @@ function updateHarvesterAI(
   width: number,
   height: number
 ): void {
+  const cfg = getAIConfig().harvester;
   const centerX = width / 2;
   const centerY = height / 2;
 
@@ -69,8 +72,8 @@ function updateHarvesterAI(
     // Angle from center to enemy + PI = away from center
     const escapeAngle = Math.atan2(centerY - enemy.y, centerX - enemy.x) + Math.PI;
     enemy.angle = escapeAngle;
-    enemy.vx += Math.cos(escapeAngle) * 0.07;
-    enemy.vy += Math.sin(escapeAngle) * 0.07;
+    enemy.vx += Math.cos(escapeAngle) * cfg.escapeAccel;
+    enemy.vy += Math.sin(escapeAngle) * cfg.escapeAccel;
 
     // Speed cap when carrying (v28: 1.5)
     const currentSpeed = Math.sqrt(enemy.vx * enemy.vx + enemy.vy * enemy.vy);
@@ -83,17 +86,24 @@ function updateHarvesterAI(
     const hitchX = enemy.x - Math.cos(enemy.angle) * 20;
     const hitchY = enemy.y - Math.sin(enemy.angle) * 20;
     const towAngle = Math.atan2(hitchY - fuel.y, hitchX - fuel.x);
-    fuel.x = hitchX - Math.cos(towAngle) * 35;
-    fuel.y = hitchY - Math.sin(towAngle) * 35;
+    fuel.x = hitchX - Math.cos(towAngle) * cfg.towLength;
+    fuel.y = hitchY - Math.sin(towAngle) * cfg.towLength;
     fuel.vx = 0;
     fuel.vy = 0;
     fuel.beingDragged = true;
 
     // Check if escaped off screen
-    if (enemy.x < -100 || enemy.x > width + 100 || enemy.y < -100 || enemy.y > height + 100) {
+    const margin = cfg.escapeMargin;
+    if (enemy.x < -margin || enemy.x > width + margin || enemy.y < -margin || enemy.y > height + margin) {
       enemy.dead = true;
       fuel.dead = true; // Fuel is captured!
     }
+    return;
+  }
+
+  // Config override: if ignoreFuel, act as exterminator
+  if (cfg.ignoreFuel) {
+    enemy.type = 'exterminator';
     return;
   }
 
@@ -104,8 +114,8 @@ function updateHarvesterAI(
     if (nearestPlayer) {
       // Move away from player
       enemy.angle = angleTo(enemy.x, enemy.y, nearestPlayer.x, nearestPlayer.y) + Math.PI;
-      enemy.vx += Math.cos(enemy.angle) * 0.08;
-      enemy.vy += Math.sin(enemy.angle) * 0.08;
+      enemy.vx += Math.cos(enemy.angle) * cfg.fleeAccel;
+      enemy.vy += Math.sin(enemy.angle) * cfg.fleeAccel;
     }
 
     // Speed cap
@@ -132,10 +142,10 @@ function updateHarvesterAI(
       let angleDiff = targetAngle - enemy.angle;
       while (angleDiff > Math.PI) angleDiff -= Math.PI * 2;
       while (angleDiff < -Math.PI) angleDiff += Math.PI * 2;
-      enemy.angle += angleDiff * 0.1;
+      enemy.angle += angleDiff * cfg.rotationSmoothing;
 
-      enemy.vx += Math.cos(enemy.angle) * 0.08;
-      enemy.vy += Math.sin(enemy.angle) * 0.08;
+      enemy.vx += Math.cos(enemy.angle) * cfg.pursuitAccel;
+      enemy.vy += Math.sin(enemy.angle) * cfg.pursuitAccel;
       enemy.targetId = fuelIndex;
 
       // Apply tank physics (no sideways drift)
@@ -143,7 +153,7 @@ function updateHarvesterAI(
 
       // Check if close enough to grab fuel
       const dist = distance(enemy.x, enemy.y, nearestFuel.x, nearestFuel.y);
-      if (dist < 30) {
+      if (dist < cfg.fuelGrabDistance) {
         enemy.dragTarget = fuelIndex;
         nearestFuel.beingDragged = true;
         nearestFuel.draggedBy = fuelIndex;
@@ -159,9 +169,6 @@ function updateHarvesterAI(
 // Tank body rotates toward target, moves forward only (no sideways drift)
 // Turret independently tracks player when within range
 // When no target, enters search mode with sweeping turret
-const TURRET_TRACKING_RANGE = 400; // Turret starts tracking at this distance
-const DETECTION_RANGE = 500; // Range at which sprinter detects and pursues player
-const SEARCH_SPEED_MULT = 0.6; // Slower movement while searching
 
 function updateSprinterAI(
   enemy: RipOffEnemy,
@@ -170,6 +177,8 @@ function updateSprinterAI(
   width: number,
   height: number
 ): void {
+  const cfg = getAIConfig().sprinter;
+
   // Find nearest alive player
   let targetPlayer: RipOffPlayer | null = null;
   let minDist = Infinity;
@@ -184,10 +193,10 @@ function updateSprinterAI(
   }
 
   // Determine if player is detected (within detection range)
-  const playerDetected = targetPlayer !== null && minDist <= DETECTION_RANGE;
+  const playerDetected = targetPlayer !== null && minDist <= cfg.detectionRange;
 
   // Track if turret should be tracking (closer range than detection)
-  enemy.isTracking = targetPlayer !== null && minDist <= TURRET_TRACKING_RANGE;
+  enemy.isTracking = targetPlayer !== null && minDist <= cfg.turretTrackingRange;
 
   // AI State management: searching vs pursuit
   if (!playerDetected) {
@@ -208,14 +217,14 @@ function updateSprinterAI(
     let turretDiff = turretTargetAngle - enemy.turretAngle;
     while (turretDiff > Math.PI) turretDiff -= Math.PI * 2;
     while (turretDiff < -Math.PI) turretDiff += Math.PI * 2;
-    enemy.turretAngle += turretDiff * 0.15; // Turret rotates faster than body
+    enemy.turretAngle += turretDiff * cfg.turretRotationTracking;
   } else {
     // Not in tracking range but detected - turret leads toward target
     const turretTargetAngle = angleTo(enemy.x, enemy.y, targetPlayer!.x, targetPlayer!.y);
     let turretDiff = turretTargetAngle - enemy.turretAngle;
     while (turretDiff > Math.PI) turretDiff -= Math.PI * 2;
     while (turretDiff < -Math.PI) turretDiff += Math.PI * 2;
-    enemy.turretAngle += turretDiff * 0.08; // Slower tracking when not locked
+    enemy.turretAngle += turretDiff * cfg.turretRotationLeading;
   }
 
   // Calculate target angle for body
@@ -223,8 +232,8 @@ function updateSprinterAI(
 
   // In tactical mode, try to flank
   if (tacticalMode) {
-    const flankOffset = enemy.spawnId % 2 === 0 ? Math.PI / 4 : -Math.PI / 4;
-    if (minDist > 200) {
+    const flankOffset = enemy.spawnId % 2 === 0 ? cfg.flankOffsetAngle : -cfg.flankOffsetAngle;
+    if (minDist > cfg.flankDistThreshold) {
       bodyTargetAngle += flankOffset;
     }
   }
@@ -233,13 +242,12 @@ function updateSprinterAI(
   let bodyDiff = bodyTargetAngle - enemy.angle;
   while (bodyDiff > Math.PI) bodyDiff -= Math.PI * 2;
   while (bodyDiff < -Math.PI) bodyDiff += Math.PI * 2;
-  enemy.angle += bodyDiff * 0.05; // Tank body rotates slower
+  enemy.angle += bodyDiff * cfg.bodyRotationSpeed;
 
   // Tank-like movement: only move forward in facing direction
   // Apply thrust in facing direction
-  const thrust = 0.08;
-  enemy.vx += Math.cos(enemy.angle) * thrust;
-  enemy.vy += Math.sin(enemy.angle) * thrust;
+  enemy.vx += Math.cos(enemy.angle) * cfg.thrust;
+  enemy.vy += Math.sin(enemy.angle) * cfg.thrust;
 
   // Apply tank physics (friction on sideways movement)
   applyTankPhysics(enemy, speed);
@@ -252,6 +260,8 @@ function updateSprinterSearchMode(
   width: number,
   height: number
 ): void {
+  const cfg = getAIConfig().sprinter;
+
   // Set searching state
   if (enemy.aiState !== 'tactical') {
     enemy.aiState = 'tactical'; // Use 'tactical' state for searching
@@ -262,9 +272,7 @@ function updateSprinterSearchMode(
   enemy.stateTimer++;
 
   // Turret SWEEP: Oscillate left and right while searching
-  // Sweep period of ~3 seconds (180 frames at 60fps)
-  const sweepSpeed = 0.02;
-  const sweepAngle = Math.sin(enemy.stateTimer * sweepSpeed) * (Math.PI / 3); // ±60 degrees
+  const sweepAngle = Math.sin(enemy.stateTimer * cfg.sweepSpeed) * cfg.sweepAmplitude;
   enemy.turretAngle = enemy.angle + sweepAngle;
 
   // PATROL MOVEMENT: Move toward center of arena, then patrol
@@ -274,16 +282,13 @@ function updateSprinterSearchMode(
 
   let bodyTargetAngle: number;
 
-  if (distToCenter > 300) {
+  if (distToCenter > cfg.patrolDistFromCenter) {
     // Far from center - move toward center
     bodyTargetAngle = angleTo(enemy.x, enemy.y, centerX, centerY);
   } else {
     // Near center - patrol in a circular pattern
-    // Use stateTimer to create a slow circular patrol
-    const patrolRadius = 150;
-    const patrolSpeed = 0.005;
-    const patrolX = centerX + Math.cos(enemy.stateTimer * patrolSpeed + enemy.spawnId) * patrolRadius;
-    const patrolY = centerY + Math.sin(enemy.stateTimer * patrolSpeed + enemy.spawnId) * patrolRadius;
+    const patrolX = centerX + Math.cos(enemy.stateTimer * cfg.patrolOrbitSpeed + enemy.spawnId) * cfg.patrolRadius;
+    const patrolY = centerY + Math.sin(enemy.stateTimer * cfg.patrolOrbitSpeed + enemy.spawnId) * cfg.patrolRadius;
     bodyTargetAngle = angleTo(enemy.x, enemy.y, patrolX, patrolY);
   }
 
@@ -291,15 +296,14 @@ function updateSprinterSearchMode(
   let bodyDiff = bodyTargetAngle - enemy.angle;
   while (bodyDiff > Math.PI) bodyDiff -= Math.PI * 2;
   while (bodyDiff < -Math.PI) bodyDiff += Math.PI * 2;
-  enemy.angle += bodyDiff * 0.03; // Slower rotation while searching
+  enemy.angle += bodyDiff * cfg.searchRotation;
 
   // Move forward at reduced speed while searching
-  const thrust = 0.05;
-  enemy.vx += Math.cos(enemy.angle) * thrust;
-  enemy.vy += Math.sin(enemy.angle) * thrust;
+  enemy.vx += Math.cos(enemy.angle) * cfg.searchThrust;
+  enemy.vy += Math.sin(enemy.angle) * cfg.searchThrust;
 
   // Apply tank physics with reduced max speed
-  applyTankPhysics(enemy, speed * SEARCH_SPEED_MULT);
+  applyTankPhysics(enemy, speed * cfg.searchSpeedMult);
 }
 
 // EXTERMINATOR AI: Rams players, uses kamikaze tactics (fast buggy)
@@ -311,17 +315,18 @@ function updateExterminatorAI(
   width: number,
   height: number
 ): void {
+  const cfg = getAIConfig().exterminator;
   const nearestPlayer = findNearestAlivePlayer(enemy, players, width, height);
   if (!nearestPlayer) {
     // No valid target, wander randomly (v28 style)
-    enemy.vx += (Math.random() - 0.5) * 0.2;
-    enemy.vy += (Math.random() - 0.5) * 0.2;
+    enemy.vx += (Math.random() - 0.5) * cfg.wanderAccel;
+    enemy.vy += (Math.random() - 0.5) * cfg.wanderAccel;
 
     // Speed cap when idle
     const currentSpeed = Math.sqrt(enemy.vx * enemy.vx + enemy.vy * enemy.vy);
-    if (currentSpeed > speed * 0.5) {
-      enemy.vx = (enemy.vx / currentSpeed) * speed * 0.5;
-      enemy.vy = (enemy.vy / currentSpeed) * speed * 0.5;
+    if (currentSpeed > speed * cfg.idleSpeedMult) {
+      enemy.vx = (enemy.vx / currentSpeed) * speed * cfg.idleSpeedMult;
+      enemy.vy = (enemy.vy / currentSpeed) * speed * cfg.idleSpeedMult;
     }
     return;
   }
@@ -339,12 +344,12 @@ function updateExterminatorAI(
 
   // ADAPTIVE AI: FLANKING (v28 style)
   // In tactical mode, alternate left/right flanking based on spawnId (even = left, odd = right)
-  if (tacticalMode) {
-    const flankOffset = enemy.spawnId % 2 === 0 ? 0.6 : -0.6;
+  if (tacticalMode && !cfg.disableFlanking) {
+    const flankOffset = enemy.spawnId % 2 === 0 ? cfg.flankOffset : -cfg.flankOffset;
     const dist = distance(enemy.x, enemy.y, targetPos.x, targetPos.y);
 
-    // Fade offset as we get closer (commit to ram at <150px)
-    if (dist > 150) {
+    // Fade offset as we get closer
+    if (dist > cfg.flankFadeDistance) {
       targetAngle += flankOffset;
     }
   }
@@ -353,15 +358,14 @@ function updateExterminatorAI(
   let angleDiff = targetAngle - enemy.angle;
   while (angleDiff > Math.PI) angleDiff -= Math.PI * 2;
   while (angleDiff < -Math.PI) angleDiff += Math.PI * 2;
-  enemy.angle += angleDiff * 0.1; // Fast rotation rate for aggressive buggy
+  enemy.angle += angleDiff * cfg.rotationSpeed;
 
   // Accelerate toward target
-  const accel = 0.12;
-  enemy.vx += Math.cos(enemy.angle) * accel;
-  enemy.vy += Math.sin(enemy.angle) * accel;
+  enemy.vx += Math.cos(enemy.angle) * cfg.acceleration;
+  enemy.vy += Math.sin(enemy.angle) * cfg.acceleration;
 
   // Apply tank physics with lighter sideways friction (buggy drifts slightly)
-  applyTankPhysics(enemy, speed, 0.5, 0.98);
+  applyTankPhysics(enemy, speed, cfg.sidewaysFriction, cfg.forwardFriction);
 }
 
 // Helper: Find nearest alive player
@@ -472,6 +476,6 @@ export function onHarvesterHit(enemy: RipOffEnemy): void {
   if (enemy.type !== 'harvester') return;
 
   enemy.aiState = 'flee';
-  enemy.stateTimer = 120; // Flee for 2 seconds
+  enemy.stateTimer = getAIConfig().harvester.fleeTimer;
   enemy.dragTarget = null;
 }
