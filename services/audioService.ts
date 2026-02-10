@@ -15,6 +15,10 @@ const SFX_PATHS = {
   fueling: `${base}sfx/fueling.mp3`,
   backgroundHum: `${base}sfx/background-hum.mp3`,
   landing: `${base}sfx/landing.mp3`,
+  motherHum: `${base}sfx/motherhum.mp3`,
+  motherStartup: `${base}sfx/mother-startup.mp3`,
+  motherStartup2: `${base}sfx/mother-startup2.mp3`,
+  motherBeep: `${base}sfx/mother-beep.mp3`,
 };
 
 class AudioService {
@@ -534,6 +538,93 @@ class AudioService {
   stopAct1Sfx() {
     this.stopBackgroundHum();
     this.stopFueling();
+  }
+
+  // --- Terminal / Colony Log Sounds ---
+
+  private motherHum: HTMLAudioElement | null = null;
+  private motherStartup2: HTMLAudioElement | null = null;
+
+  playTerminalHum() {
+    if (this.isMuted) return;
+    if (this.motherHum && !this.motherHum.paused) return; // Already playing
+
+    if (!this.motherHum) {
+      this.motherHum = new Audio(SFX_PATHS.motherHum);
+      this.motherHum.loop = true;
+      this.motherHum.volume = 0;
+    }
+
+    this.motherHum.play().then(() => {
+      // Fade in
+      if (this.motherHum) {
+        this.motherHum.volume = 0;
+        const fadeIn = setInterval(() => {
+          if (this.motherHum && this.motherHum.volume < this.sfxVolume * 0.5) {
+            this.motherHum.volume = Math.min(this.motherHum.volume + 0.05, this.sfxVolume * 0.5);
+          } else {
+            clearInterval(fadeIn);
+          }
+        }, 50);
+      }
+    }).catch(() => {});
+  }
+
+  stopTerminalHum() {
+    // Fade out hum
+    if (this.motherHum) {
+      const fadeOut = setInterval(() => {
+        if (this.motherHum && this.motherHum.volume > 0.05) {
+          this.motherHum.volume = Math.max(this.motherHum.volume - 0.05, 0);
+        } else {
+          clearInterval(fadeOut);
+          if (this.motherHum) {
+            this.motherHum.pause();
+            this.motherHum.currentTime = 0;
+          }
+        }
+      }, 50);
+    }
+    // Stop startup2 if still playing
+    if (this.motherStartup2) {
+      this.motherStartup2.pause();
+      this.motherStartup2.currentTime = 0;
+    }
+  }
+
+  // Plays once when terminal finishes booting, before text starts
+  playTerminalBlip() {
+    if (this.isMuted) return;
+    const sound = new Audio(SFX_PATHS.motherStartup);
+    sound.volume = this.sfxVolume * 0.7;
+    sound.play().catch(() => {});
+  }
+
+  // Plays looping while text is typing out, stops when done
+  playTypewriterTick() {
+    if (this.isMuted) return;
+    if (this.motherStartup2 && !this.motherStartup2.paused) return; // Already playing
+
+    if (!this.motherStartup2) {
+      this.motherStartup2 = new Audio(SFX_PATHS.motherStartup2);
+      this.motherStartup2.loop = true;
+      this.motherStartup2.volume = this.sfxVolume * 0.5;
+    }
+
+    this.motherStartup2.play().catch(() => {});
+  }
+
+  stopTypewriterTick() {
+    if (!this.motherStartup2) return;
+    this.motherStartup2.pause();
+    this.motherStartup2.currentTime = 0;
+  }
+
+  playTerminalClick() {
+    if (this.isMuted) return;
+    const sound = new Audio(SFX_PATHS.motherBeep);
+    sound.volume = this.sfxVolume * 0.7;
+    sound.play().catch(() => {});
   }
 }
 

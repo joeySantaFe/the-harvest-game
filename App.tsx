@@ -3,11 +3,15 @@ import { AppState, HighScore, ActUnlocks, ActInfo } from './types';
 import { ArcadeButton } from './components/ArcadeButton';
 import { ActThumbnail } from './components/ActThumbnail';
 import { MenuBackground } from './components/MenuBackground';
+import { ColonyLogScreen } from './components/ColonyLog/ColonyLogScreen';
+import { LogArchive } from './components/ColonyLog/LogArchive';
+import { STORY_LOGS } from './components/ColonyLog/logs';
 import { INITIAL_FUEL, FUEL_TO_LIVES_RATIO, MAX_BONUS_LIVES } from './constants';
 import { audioService } from './services/audioService';
 import LanderGame from './games/LanderGame';
 import RipOffGame from './games/RipOffGame';
 import BattlezoneGame from './games/BattlezoneGame';
+import DevLabScreen from './devlab/DevLabScreen';
 
 // Act information for menu thumbnails
 const ACT_INFO: ActInfo[] = [
@@ -43,6 +47,12 @@ const App: React.FC = () => {
         act3Unlocked: false,
     });
 
+    // Colony Log chapter tracking
+    const [currentChapter, setCurrentChapter] = useState(1);
+    const [unlockedChapters, setUnlockedChapters] = useState<number[]>([]);
+    const [viewingFromArchive, setViewingFromArchive] = useState(false);
+    const [fadeInNext, setFadeInNext] = useState(false);
+
     // Debug mode - Option key held
     const [debugMode, setDebugMode] = useState(false);
 
@@ -55,9 +65,15 @@ const App: React.FC = () => {
         if (savedUnlocks) {
             setActUnlocks(JSON.parse(savedUnlocks));
         }
+
+        // Load unlocked chapters
+        const savedChapters = localStorage.getItem('theHarvestChapters');
+        if (savedChapters) {
+            setUnlockedChapters(JSON.parse(savedChapters));
+        }
     }, []);
 
-    // Listen for Option key to enable debug mode, Option+R to reset progress
+    // Listen for Option key to enable debug mode, Option+R to reset progress, Ctrl+Shift+D for DevLab
     useEffect(() => {
         const handleKeyDown = (e: KeyboardEvent) => {
             if (e.key === 'Alt') {
@@ -66,7 +82,13 @@ const App: React.FC = () => {
             // Option+R to reset act unlocks (debug feature)
             if (e.altKey && e.key === 'r') {
                 localStorage.removeItem('theHarvestUnlocks');
+                localStorage.removeItem('theHarvestChapters');
                 setActUnlocks({ act2Unlocked: false, act3Unlocked: false });
+                setUnlockedChapters([]);
+            }
+            // Ctrl+Shift+D to open DevLab from menu
+            if (e.ctrlKey && e.shiftKey && e.key === 'D') {
+                setAppState(AppState.DEVLAB);
             }
         };
         const handleKeyUp = (e: KeyboardEvent) => {
@@ -125,7 +147,13 @@ const App: React.FC = () => {
         // Normal click - only works on unlocked acts
         if (!unlocked) return;
 
-        // Start the selected act directly
+        // Act 1 click starts the full campaign flow (with colony log)
+        if (act.actNumber === 1) {
+            startCampaign();
+            return;
+        }
+
+        // Other acts: jump directly (replay from thumbnail)
         setCampaignFuel(INITIAL_FUEL);
         setCampaignScore(0);
         setCampaignHull(100);
@@ -142,6 +170,7 @@ const App: React.FC = () => {
             AppState.HIGHSCORES,
             AppState.GAME_OVER,
             AppState.VICTORY,
+            AppState.LOG_ARCHIVE,
         ];
 
         const stateToTrack: Partial<Record<AppState, 'act1' | 'act2' | 'act3'>> = {
@@ -150,7 +179,10 @@ const App: React.FC = () => {
             [AppState.ACT_3_BATTLE]: 'act3',
         };
 
-        if (menuStates.includes(appState)) {
+        if (appState === AppState.COLONY_LOG) {
+            // Colony log screens use their own terminal audio, silence music
+            audioService.stopMusic();
+        } else if (menuStates.includes(appState)) {
             audioService.playMusic('menu');
         } else if (stateToTrack[appState]) {
             audioService.playMusic(stateToTrack[appState]!);
@@ -169,11 +201,24 @@ const App: React.FC = () => {
         return () => window.removeEventListener('keydown', onKey);
     }, []);
 
+    // Helper to unlock a chapter and persist to localStorage
+    const unlockChapter = (chapter: number) => {
+        setUnlockedChapters(prev => {
+            if (prev.includes(chapter)) return prev;
+            const updated = [...prev, chapter];
+            localStorage.setItem('theHarvestChapters', JSON.stringify(updated));
+            return updated;
+        });
+    };
+
     const startCampaign = () => {
         setCampaignFuel(INITIAL_FUEL);
         setCampaignScore(0);
         setCampaignHull(100);
-        setAppState(AppState.NARRATIVE);
+        setCurrentChapter(1);
+        setViewingFromArchive(false);
+        unlockChapter(1);
+        setAppState(AppState.COLONY_LOG);
     };
 
     const handleAct1Complete = (results: { fuelRemaining: number, scoreGained: number, hullIntegrity: number }) => {
@@ -184,8 +229,10 @@ const App: React.FC = () => {
         // Unlock Act 2
         unlockAct(2);
 
-        // Transition to Act II narrative
-        setAppState(AppState.NARRATIVE);
+        // Transition to Chapter 2 (Surface Contact debrief)
+        setCurrentChapter(2);
+        unlockChapter(2);
+        setAppState(AppState.COLONY_LOG);
     };
 
     const handleAct2Complete = (results: { fuelRemaining: number, scoreGained: number, hullIntegrity: number }) => {
@@ -196,8 +243,10 @@ const App: React.FC = () => {
         // Unlock Act 3
         unlockAct(3);
 
-        // Transition to Act III (Battlezone)
-        setAppState(AppState.ACT_3_BATTLE);
+        // Transition to Chapter 4 (Escalation debrief)
+        setCurrentChapter(4);
+        unlockChapter(4);
+        setAppState(AppState.COLONY_LOG);
     };
 
     // Debug: Jump to specific act
@@ -223,7 +272,57 @@ const App: React.FC = () => {
     const handleGameOver = (finalScore: number) => {
         setCampaignScore(finalScore);
         const isHigh = highScores.length < 10 || finalScore > highScores[highScores.length - 1].score;
-        setAppState(isHigh ? AppState.GAME_OVER : AppState.MENU); 
+        setAppState(isHigh ? AppState.GAME_OVER : AppState.MENU);
+    };
+
+    // Colony Log chapter progression
+    const handleColonyLogContinue = () => {
+        // If viewing from archive, return to archive
+        if (viewingFromArchive) {
+            setViewingFromArchive(false);
+            setAppState(AppState.LOG_ARCHIVE);
+            return;
+        }
+
+        switch (currentChapter) {
+            case 1:
+                // Ch1 done → start Act 1
+                setFadeInNext(true);
+                audioService.playMusic('act1');
+                setAppState(AppState.ACT_1_LANDER);
+                break;
+            case 2:
+                // Ch2 done → show Ch3 (back-to-back)
+                setCurrentChapter(3);
+                unlockChapter(3);
+                setAppState(AppState.COLONY_LOG);
+                break;
+            case 3:
+                // Ch3 done → start Act 2
+                setFadeInNext(true);
+                audioService.playMusic('act2');
+                setAppState(AppState.ACT_2_HARVEST);
+                break;
+            case 4:
+                // Ch4 done → show Ch5 (back-to-back)
+                setCurrentChapter(5);
+                unlockChapter(5);
+                setAppState(AppState.COLONY_LOG);
+                break;
+            case 5:
+                // Ch5 done → start Act 3
+                setFadeInNext(true);
+                audioService.playMusic('act3');
+                setAppState(AppState.ACT_3_BATTLE);
+                break;
+            case 6:
+                // Ch6 done → Victory / Menu
+                setFadeInNext(true);
+                setAppState(AppState.VICTORY);
+                break;
+            default:
+                setAppState(AppState.MENU);
+        }
     };
 
     const submitHighScore = () => {
@@ -236,43 +335,89 @@ const App: React.FC = () => {
 
     // --- State Machine Renders ---
 
+    // Wrapper that fades in content when transitioning from colony log
+    const FadeWrapper = ({ children }: { children: React.ReactNode }) => {
+        if (!fadeInNext) return <>{children}</>;
+        return (
+            <div className="animate-fade-in" onAnimationEnd={() => setFadeInNext(false)}>
+                {children}
+            </div>
+        );
+    };
+
     if (appState === AppState.ACT_1_LANDER) {
         return (
-            <LanderGame
-                initialFuel={campaignFuel}
-                initialScore={campaignScore}
-                onComplete={handleAct1Complete}
-                onFailure={handleGameOver}
-                onJumpToAct={handleJumpToAct}
-            />
+            <FadeWrapper>
+                <LanderGame
+                    initialFuel={campaignFuel}
+                    initialScore={campaignScore}
+                    onComplete={handleAct1Complete}
+                    onFailure={handleGameOver}
+                    onJumpToAct={handleJumpToAct}
+                />
+            </FadeWrapper>
         );
     }
 
     if (appState === AppState.ACT_2_HARVEST) {
         return (
-            <RipOffGame
-                initialFuel={campaignFuel}
-                initialScore={campaignScore}
-                playerCount={1}
-                onComplete={handleAct2Complete}
-                onFailure={handleGameOver}
-                onJumpToAct={handleJumpToAct}
+            <FadeWrapper>
+                <RipOffGame
+                    initialFuel={campaignFuel}
+                    initialScore={campaignScore}
+                    playerCount={1}
+                    onComplete={handleAct2Complete}
+                    onFailure={handleGameOver}
+                    onJumpToAct={handleJumpToAct}
+                />
+            </FadeWrapper>
+        );
+    }
+
+    if (appState === AppState.COLONY_LOG) {
+        const log = STORY_LOGS.find(l => l.chapter === currentChapter);
+        if (log) {
+            return <ColonyLogScreen key={`ch-${currentChapter}`} log={log} onContinue={handleColonyLogContinue} />;
+        }
+        // Fallback if chapter not found
+        setAppState(AppState.MENU);
+        return null;
+    }
+
+    if (appState === AppState.LOG_ARCHIVE) {
+        return (
+            <LogArchive
+                unlockedChapters={unlockedChapters}
+                onSelectLog={(chapter) => {
+                    setCurrentChapter(chapter);
+                    setViewingFromArchive(true);
+                    setAppState(AppState.COLONY_LOG);
+                }}
+                onBack={() => setAppState(AppState.MENU)}
             />
         );
     }
 
+    if (appState === AppState.DEVLAB) {
+        return <DevLabScreen onExit={() => setAppState(AppState.MENU)} />;
+    }
+
     if (appState === AppState.ACT_3_BATTLE) {
         return (
-            <BattlezoneGame
-                initialFuel={campaignFuel}
-                initialScore={campaignScore}
-                onComplete={(results) => {
-                    setCampaignScore(prev => prev + results.scoreGained);
-                    setAppState(AppState.VICTORY);
-                }}
-                onFailure={handleGameOver}
-                onJumpToAct={handleJumpToAct}
-            />
+            <FadeWrapper>
+                <BattlezoneGame
+                    initialFuel={campaignFuel}
+                    initialScore={campaignScore}
+                    onComplete={(results) => {
+                        setCampaignScore(prev => prev + results.scoreGained);
+                        setCurrentChapter(6);
+                        unlockChapter(6);
+                        setAppState(AppState.COLONY_LOG);
+                    }}
+                    onFailure={handleGameOver}
+                    onJumpToAct={handleJumpToAct}
+                />
+            </FadeWrapper>
         );
     }
 
@@ -312,16 +457,33 @@ const App: React.FC = () => {
                         <div className="flex gap-4 flex-wrap justify-center">
                             <ArcadeButton variant="secondary" onClick={() => setAppState(AppState.HELP)}>CONTROLS</ArcadeButton>
                             <ArcadeButton variant="secondary" onClick={() => setAppState(AppState.HIGHSCORES)}>RECORDS</ArcadeButton>
+                            {unlockedChapters.length > 0 && (
+                                <ArcadeButton variant="secondary" onClick={() => setAppState(AppState.LOG_ARCHIVE)}>COLONY LOGS</ArcadeButton>
+                            )}
                         </div>
 
+                        {/* DevLab button (visible when Alt/Option held) */}
+                        {debugMode && (
+                            <div className="mt-4">
+                                <button
+                                    onClick={() => setAppState(AppState.DEVLAB)}
+                                    className="px-4 py-2 bg-[#111] border border-[#fa0] text-[#fa0] hover:bg-[#fa0] hover:text-black transition-colors text-sm tracking-widest"
+                                >
+                                    DEVLAB
+                                </button>
+                            </div>
+                        )}
+
                         {/* Debug: Reset Progress (only show if there's saved progress) */}
-                        {(actUnlocks.act2Unlocked || actUnlocks.act3Unlocked) && (
+                        {(actUnlocks.act2Unlocked || actUnlocks.act3Unlocked || unlockedChapters.length > 0) && (
                             <div className="mt-6 text-center">
                                 <button
                                     onClick={() => {
                                         localStorage.removeItem('theHarvestUnlocks');
+                                        localStorage.removeItem('theHarvestChapters');
                                         setActUnlocks({ act2Unlocked: false, act3Unlocked: false });
-                                            }}
+                                        setUnlockedChapters([]);
+                                    }}
                                     className="text-[#666] text-xs hover:text-[#f04] transition-colors underline"
                                 >
                                     Reset Act Progress
@@ -364,7 +526,7 @@ const App: React.FC = () => {
                 )}
 
                 {appState === AppState.VICTORY && (
-                    <div className="max-w-3xl text-center">
+                    <div className={`max-w-3xl text-center ${fadeInNext ? 'animate-fade-in' : ''}`} onAnimationEnd={() => setFadeInNext(false)}>
                          <h2 className="text-4xl text-[#0f0] mb-8 tracking-[0.5em]">MISSION COMPLETE</h2>
                          <p className="text-xl mb-8 leading-relaxed">
                             The harvest has been defended.<br/>

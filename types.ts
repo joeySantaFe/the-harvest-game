@@ -10,7 +10,10 @@ export enum AppState {
   GAME_OVER = 'GAME_OVER',
   VICTORY = 'VICTORY',
   HIGHSCORES = 'HIGHSCORES',
-  HELP = 'HELP'
+  HELP = 'HELP',
+  DEVLAB = 'DEVLAB',
+  COLONY_LOG = 'COLONY_LOG',
+  LOG_ARCHIVE = 'LOG_ARCHIVE'
 }
 
 // Internal State for the Lander Game Component

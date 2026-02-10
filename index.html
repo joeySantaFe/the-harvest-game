@@ -5,6 +5,9 @@
     <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=0" />
     <title>The Harvest</title>
     <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=VT323&display=swap" rel="stylesheet" />
     <style>
       @import url('https://fonts.googleapis.com/css2?family=Courier+Prime:wght@400;700&display=swap');
       
@@ -42,6 +45,13 @@
       
       @keyframes glow-gold { 0%, 100% { text-shadow: 0 0 10px #fd0; } 50% { text-shadow: 0 0 25px #fd0, 0 0 35px #fa0; } }
       .animate-glow-gold { animation: glow-gold 1s infinite; }
+
+      /* CRT flicker for Colony Log screens */
+      @keyframes crt-flicker { 0% { opacity: 0.02; } 50% { opacity: 0.04; } 100% { opacity: 0.02; } }
+
+      /* Fade-in for screens after colony log */
+      @keyframes fade-in-screen { from { opacity: 0; } to { opacity: 1; } }
+      .animate-fade-in { animation: fade-in-screen 800ms ease-in forwards; }
     </style>
 </head>
 <body>
