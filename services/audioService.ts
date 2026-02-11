@@ -388,6 +388,7 @@ class AudioService {
 
     this.currentMusic = null;
     this.currentTrack = null;
+    this.musicStarted = false;
   }
 
   setMusicVolume(volume: number) {

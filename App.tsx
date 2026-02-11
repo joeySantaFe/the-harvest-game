@@ -288,7 +288,6 @@ const App: React.FC = () => {
             case 1:
                 // Ch1 done → start Act 1
                 setFadeInNext(true);
-                audioService.playMusic('act1');
                 setAppState(AppState.ACT_1_LANDER);
                 break;
             case 2:
@@ -300,7 +299,6 @@ const App: React.FC = () => {
             case 3:
                 // Ch3 done → start Act 2
                 setFadeInNext(true);
-                audioService.playMusic('act2');
                 setAppState(AppState.ACT_2_HARVEST);
                 break;
             case 4:
@@ -312,7 +310,6 @@ const App: React.FC = () => {
             case 5:
                 // Ch5 done → start Act 3
                 setFadeInNext(true);
-                audioService.playMusic('act3');
                 setAppState(AppState.ACT_3_BATTLE);
                 break;
             case 6:
@@ -335,19 +332,17 @@ const App: React.FC = () => {
 
     // --- State Machine Renders ---
 
-    // Wrapper that fades in content when transitioning from colony log
-    const FadeWrapper = ({ children }: { children: React.ReactNode }) => {
-        if (!fadeInNext) return <>{children}</>;
-        return (
-            <div className="animate-fade-in" onAnimationEnd={() => setFadeInNext(false)}>
-                {children}
-            </div>
-        );
-    };
+    // Fade-in props for transitioning from colony log to gameplay.
+    // Inlined as a native <div> to avoid the React anti-pattern of defining
+    // components inside render (which causes children to unmount/remount on re-render).
+    const fadeProps = fadeInNext ? {
+        className: "animate-fade-in",
+        onAnimationEnd: () => setFadeInNext(false),
+    } : {};
 
     if (appState === AppState.ACT_1_LANDER) {
         return (
-            <FadeWrapper>
+            <div {...fadeProps}>
                 <LanderGame
                     initialFuel={campaignFuel}
                     initialScore={campaignScore}
@@ -355,13 +350,13 @@ const App: React.FC = () => {
                     onFailure={handleGameOver}
                     onJumpToAct={handleJumpToAct}
                 />
-            </FadeWrapper>
+            </div>
         );
     }
 
     if (appState === AppState.ACT_2_HARVEST) {
         return (
-            <FadeWrapper>
+            <div {...fadeProps}>
                 <RipOffGame
                     initialFuel={campaignFuel}
                     initialScore={campaignScore}
@@ -370,7 +365,7 @@ const App: React.FC = () => {
                     onFailure={handleGameOver}
                     onJumpToAct={handleJumpToAct}
                 />
-            </FadeWrapper>
+            </div>
         );
     }
 
@@ -404,7 +399,7 @@ const App: React.FC = () => {
 
     if (appState === AppState.ACT_3_BATTLE) {
         return (
-            <FadeWrapper>
+            <div {...fadeProps}>
                 <BattlezoneGame
                     initialFuel={campaignFuel}
                     initialScore={campaignScore}
@@ -417,7 +412,7 @@ const App: React.FC = () => {
                     onFailure={handleGameOver}
                     onJumpToAct={handleJumpToAct}
                 />
-            </FadeWrapper>
+            </div>
         );
     }
 

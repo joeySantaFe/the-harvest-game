@@ -1,5 +1,13 @@
 # The Harvest - Changelog
 
+## [1.4.1] - 2026-02-11
+
+### Fixed
+- **Visual jump at Act I start** - Game no longer flickers/jumps ~1 second after the colony log fade-in completes. The `FadeWrapper` component was defined inside the App render function, causing React to unmount and remount the entire game (reinitializing terrain, ship, and camera) on every re-render. Replaced with an inlined `<div>` that persists across renders.
+- **Music not playing on Act I replay** - Music now plays correctly when replaying Act I after completing it. Removed redundant `playMusic()` calls from colony log transitions that raced with the centralized music useEffect, creating duplicate Audio elements where the audible one was orphaned at volume 0. Also fixed `stopMusic()` not resetting the `musicStarted` flag, which left stale state between plays.
+
+---
+
 ## [1.4.0] - 2026-02-05
 
 ### Added
