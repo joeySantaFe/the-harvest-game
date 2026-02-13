@@ -664,9 +664,9 @@ const RipOffGame: React.FC<RipOffGameProps> = ({
     drawShapeBase(ctx, x, y, angle, shape, color, canvas?.width || 0, canvas?.height || 0);
   };
 
-  const drawTank = (ctx: CanvasRenderingContext2D, x: number, y: number, angle: number, turretAngle: number, treadOffset: number, color: string) => {
+  const drawTank = (ctx: CanvasRenderingContext2D, x: number, y: number, angle: number, turretAngle: number, treadOffset: number, color: string, showTurret: boolean = true) => {
     const canvas = canvasRef.current;
-    drawTankBase(ctx, x, y, angle, turretAngle, treadOffset, color, canvas?.width || 0, canvas?.height || 0);
+    drawTankBase(ctx, x, y, angle, turretAngle, treadOffset, color, canvas?.width || 0, canvas?.height || 0, showTurret);
   };
 
   const drawBuggy = (ctx: CanvasRenderingContext2D, x: number, y: number, angle: number, treadOffset: number, color: string) => {
@@ -746,7 +746,8 @@ const RipOffGame: React.FC<RipOffGameProps> = ({
     if (enemy.type === 'harvester' || enemy.type === 'sprinter') {
       // Tank with animated treads
       const turretAngle = enemy.type === 'sprinter' ? enemy.turretAngle : enemy.angle;
-      drawTank(ctx, enemy.x, enemy.y, enemy.angle, turretAngle, enemy.treadOffset, enemy.color);
+      const showTurret = enemy.type !== 'harvester';
+      drawTank(ctx, enemy.x, enemy.y, enemy.angle, turretAngle, enemy.treadOffset, enemy.color, showTurret);
 
       // Draw tracking indicator for sprinters when locked on
       if (enemy.type === 'sprinter' && enemy.isTracking) {

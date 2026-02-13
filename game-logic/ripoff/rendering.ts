@@ -69,7 +69,8 @@ export function drawTank(
   treadOffset: number,
   color: string,
   canvasWidth: number,
-  canvasHeight: number
+  canvasHeight: number,
+  showTurret: boolean = true
 ): void {
   if (!isFinite(x) || !isFinite(y) || !isFinite(bodyAngle)) return;
 
@@ -119,21 +120,23 @@ export function drawTank(
   ctx.restore();
 
   // Draw turret (separate rotation)
-  ctx.save();
-  ctx.translate(x, y);
-  ctx.rotate(turretAngle);
-  ctx.strokeStyle = color;
-  ctx.lineWidth = 3;
-  ctx.beginPath();
-  ctx.moveTo(0, 0);
-  ctx.lineTo(20, 0);
-  ctx.stroke();
-  // Turret base circle
-  ctx.lineWidth = 2;
-  ctx.beginPath();
-  ctx.arc(0, 0, 4, 0, Math.PI * 2);
-  ctx.stroke();
-  ctx.restore();
+  if (showTurret) {
+    ctx.save();
+    ctx.translate(x, y);
+    ctx.rotate(turretAngle);
+    ctx.strokeStyle = color;
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.moveTo(0, 0);
+    ctx.lineTo(20, 0);
+    ctx.stroke();
+    // Turret base circle
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.arc(0, 0, 4, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.restore();
+  }
 }
 
 export function drawBuggy(

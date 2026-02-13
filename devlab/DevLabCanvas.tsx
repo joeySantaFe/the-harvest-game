@@ -361,7 +361,8 @@ const DevLabCanvas = forwardRef<DevLabCanvasHandle, DevLabCanvasProps>(({
 
       if (enemy.type === 'harvester' || enemy.type === 'sprinter') {
         const turretAngle = enemy.type === 'sprinter' ? enemy.turretAngle : enemy.angle;
-        drawTank(ctx, enemy.x, enemy.y, enemy.angle, turretAngle, enemy.treadOffset, enemy.color, width, height);
+        const showTurret = enemy.type !== 'harvester';
+        drawTank(ctx, enemy.x, enemy.y, enemy.angle, turretAngle, enemy.treadOffset, enemy.color, width, height, showTurret);
 
         if (enemy.type === 'sprinter' && enemy.isTracking) {
           ctx.strokeStyle = enemy.color;
