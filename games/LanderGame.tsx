@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState, useCallback } from 'react';
-import { GameActProps, LanderState, KeyMap, Ship, TerrainSegment, Particle, Vector, Debris, ShipSystem } from '../types';
-import { GRAVITY, THRUST_POWER, ROTATION_ACCEL, ROTATION_DRAG, FRICTION, INITIAL_FUEL, SCREEN_COLORS, DEFAULT_KEYMAP, MAX_SAFE_VELOCITY_X, MAX_SAFE_VELOCITY_Y, MAX_SURVIVABLE_VELOCITY_Y, MAX_SAFE_ANGLE, WORLD_WIDTH, MAX_ZOOM, ZOOM_THRESHOLD, MAX_ABSOLUTE_VELOCITY } from '../constants';
+import { GameActProps, LanderState, KeyMap, Ship, TerrainSegment, Particle, Vector, Debris, ShipSystem, FallingStar } from '../types';
+import { GRAVITY, THRUST_POWER, ROTATION_ACCEL, ROTATION_DRAG, FRICTION, INITIAL_FUEL, SCREEN_COLORS, DEFAULT_KEYMAP, MAX_SAFE_VELOCITY_X, MAX_SAFE_VELOCITY_Y, MAX_SURVIVABLE_VELOCITY_Y, MAX_SAFE_ANGLE, WORLD_WIDTH, MAX_ZOOM, ZOOM_THRESHOLD, MAX_ABSOLUTE_VELOCITY, FALLING_STAR } from '../constants';
 import { audioService } from '../services/audioService';
 import { ArcadeButton } from '../components/ArcadeButton';
 
@@ -94,6 +94,7 @@ const LanderGame: React.FC<GameActProps> = ({ initialFuel, initialScore, onCompl
   const keyMapRef = useRef<KeyMap>(DEFAULT_KEYMAP);
   
   const starsRef = useRef<{ x: number; y: number; size: number; isTwinkling: boolean; twinklePhase: number; twinkleSpeed: number; }[]>([]);
+  const fallingStarsRef = useRef<FallingStar[]>([]);
   const screenShakeRef = useRef<number>(0);
   const cameraRef = useRef({ x: 0, y: 0, zoom: 1 });
   const devSettingsRef = useRef({ flameScale: 2.0 });
@@ -345,6 +346,8 @@ const LanderGame: React.FC<GameActProps> = ({ initialFuel, initialScore, onCompl
      ship.vel = { x: 0, y: 0 };
      ship.angularVel = 0;
      ship.angle = -Math.PI/2;
+     // Snap ship to exact ground position (leg tip is 16px below center when upright)
+     ship.pos.y = segment.y1 - 16;
      audioService.playLanding();
      audioService.stopBackgroundHum();
      
@@ -517,9 +520,9 @@ const LanderGame: React.FC<GameActProps> = ({ initialFuel, initialScore, onCompl
                 seq.timer = 180;
                 ship.landed = false;
                 ship.groundY = undefined;
-                ship.enginePower = 1.0;
+                ship.enginePower = 0.3;
                 createDustCloud(ship.pos.x, ship.pos.y);
-                ship.pos.y -= 5; ship.vel.y = 0; ship.vel.x = 0;
+                ship.pos.y -= 1; ship.vel.y = -0.2; ship.vel.x = 0;
                 if (statusOverlayRef.current) statusOverlayRef.current.innerText = '';
                 audioService.setThrust(true);
                 audioService.startBackgroundHum();
@@ -660,11 +663,18 @@ const LanderGame: React.FC<GameActProps> = ({ initialFuel, initialScore, onCompl
                 }
                 
                 if (!segment?.isPad) hittingRoughTerrain = true;
-                ship.pos.y -= depth * 0.1; 
-                ship.vel.y *= -0.1; 
-                ship.vel.x *= 0.9;  
-                const torque = (isLeft ? 1 : -1) * (depth * 0.005) + (ship.vel.x * 0.01);
-                ship.angularVel += torque;
+                ship.pos.y -= depth * 0.8;
+                ship.vel.y *= -0.1;
+                ship.vel.x *= 0.9;
+                // Torque from penetration depth
+                const depthTorque = (isLeft ? 1 : -1) * (depth * 0.02) + (ship.vel.x * 0.01);
+                ship.angularVel += depthTorque;
+                // When on a pad with one leg, apply a restoring torque toward upright
+                // based on the angle error, not just penetration — this prevents the hang
+                if (segment?.isPad) {
+                    const uprightError = (-Math.PI / 2) - ship.angle;
+                    ship.angularVel += uprightError * 0.015;
+                }
                 
                 return damage;
             };
@@ -743,7 +753,16 @@ const LanderGame: React.FC<GameActProps> = ({ initialFuel, initialScore, onCompl
                      settle.accumulatedDamage = 0;
                  }
             } else {
-                // REMOVED OLD RESTORATION LOGIC (Using Spring Physics now)
+                // No leg contact this frame — allow a grace period before resetting
+                // so brief bounces during settling don't restart the counter
+                const settle = landingSettleRef.current;
+                if (settle.framesOnPad > 0) {
+                    settle.framesOnPad = Math.max(0, settle.framesOnPad - 2);
+                    if (settle.framesOnPad === 0) {
+                        settle.currentPad = null;
+                        settle.accumulatedDamage = 0;
+                    }
+                }
             }
         }
     } else if (ship.dead) {
@@ -838,6 +857,49 @@ const LanderGame: React.FC<GameActProps> = ({ initialFuel, initialScore, onCompl
 
     particlesRef.current.forEach(p => { p.x += p.vx; p.y += p.vy; p.life--; });
     particlesRef.current = particlesRef.current.filter(p => p.life > 0);
+
+    // --- Falling Stars ---
+    if (FALLING_STAR.INTENSITY > 0 && canvasRef.current) {
+      const cvs = canvasRef.current;
+      const spawnChance = FALLING_STAR.INTENSITY / FALLING_STAR.FREQUENCY;
+      if (Math.random() < spawnChance && fallingStarsRef.current.length < FALLING_STAR.MAX_ACTIVE) {
+        // Random angle: mostly diagonal (30–60 degrees from horizontal, left-to-right or right-to-left)
+        const baseAngle = (Math.PI / 6) + Math.random() * (Math.PI / 3); // 30–90 deg
+        const direction = Math.random() > 0.5 ? 1 : -1;
+        const angle = direction > 0 ? baseAngle : Math.PI - baseAngle;
+        const speed = FALLING_STAR.MIN_SPEED + Math.random() * (FALLING_STAR.MAX_SPEED - FALLING_STAR.MIN_SPEED);
+        const maxLife = 30 + Math.floor(Math.random() * 30); // 30–60 frames
+
+        // Spawn along top or side edges
+        let sx: number, sy: number;
+        if (Math.random() > 0.3) {
+          // Top edge
+          sx = Math.random() * cvs.width;
+          sy = Math.random() * cvs.height * 0.2;
+        } else {
+          // Side edge (direction-dependent)
+          sx = direction > 0 ? -10 : cvs.width + 10;
+          sy = Math.random() * cvs.height * 0.5;
+        }
+
+        fallingStarsRef.current.push({
+          x: sx, y: sy,
+          vx: Math.cos(angle) * speed,
+          vy: Math.sin(angle) * speed,
+          life: maxLife, maxLife,
+          speed, alpha: 0
+        });
+      }
+
+      // Update positions and decrement life
+      fallingStarsRef.current.forEach(fs => {
+        fs.x += fs.vx;
+        fs.y += fs.vy;
+        fs.life--;
+        fs.alpha = Math.sin(Math.PI * fs.life / fs.maxLife) * (0.3 + 0.3 * FALLING_STAR.INTENSITY);
+      });
+      fallingStarsRef.current = fallingStarsRef.current.filter(fs => fs.life > 0);
+    }
   };
 
   const handleCrash = () => {
@@ -869,11 +931,27 @@ const LanderGame: React.FC<GameActProps> = ({ initialFuel, initialScore, onCompl
 
     const cam = cameraRef.current;
     starsRef.current.forEach(s => {
-        const pX = (s.x - cam.x * 0.05 + WORLD_WIDTH) % cvs.width; 
+        const pX = (s.x - cam.x * 0.05 + WORLD_WIDTH) % cvs.width;
         const screenX = (pX + cvs.width) % cvs.width;
         let alpha = s.isTwinkling ? 0.4 + (Math.sin(s.twinklePhase += s.twinkleSpeed) + 1) * 0.4 : (s.size === 2 ? 0.6 : 0.3);
         ctx.fillStyle = `rgba(255, 255, 255, ${alpha})`;
         ctx.fillRect(screenX, s.y, s.size, s.size);
+    });
+
+    // --- Falling Stars ---
+    fallingStarsRef.current.forEach(fs => {
+        if (fs.alpha <= 0) return;
+        const tailX = fs.x - (fs.vx / fs.speed) * FALLING_STAR.TAIL_LENGTH;
+        const tailY = fs.y - (fs.vy / fs.speed) * FALLING_STAR.TAIL_LENGTH;
+        const gradient = ctx.createLinearGradient(fs.x, fs.y, tailX, tailY);
+        gradient.addColorStop(0, `rgba(255, 250, 240, ${fs.alpha})`);
+        gradient.addColorStop(1, `rgba(255, 250, 240, 0)`);
+        ctx.strokeStyle = gradient;
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(fs.x, fs.y);
+        ctx.lineTo(tailX, tailY);
+        ctx.stroke();
     });
 
     ctx.save();

@@ -203,6 +203,17 @@ export type RipOffParticle = {
   color: string;
 };
 
+export type FallingStar = {
+  x: number;
+  y: number;
+  vx: number;
+  vy: number;
+  life: number;
+  maxLife: number;
+  speed: number;
+  alpha: number;
+};
+
 export type PopupText = {
   x: number;
   y: number;

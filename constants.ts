@@ -112,3 +112,13 @@ export const ENEMY_COLORS = {
 // Fuel to Lives Conversion
 export const FUEL_TO_LIVES_RATIO = 150; // 150 fuel = 1 bonus life
 export const MAX_BONUS_LIVES = 4;
+
+// --- Falling Star Effect (Act I) ---
+export const FALLING_STAR = {
+  FREQUENCY: 300,       // Average spawn interval in frames (~5 seconds at 60fps)
+  INTENSITY: 1.0,       // 0.0–1.0: controls spawn rate and max alpha
+  MIN_SPEED: 3,         // Minimum streak speed (px/frame)
+  MAX_SPEED: 7,         // Maximum streak speed (px/frame)
+  TAIL_LENGTH: 80,      // Fade trail length in pixels
+  MAX_ACTIVE: 3,        // Cap on simultaneous falling stars
+};
