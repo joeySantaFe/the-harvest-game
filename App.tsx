@@ -6,7 +6,7 @@ import { MenuBackground } from './components/MenuBackground';
 import { ColonyLogScreen } from './components/ColonyLog/ColonyLogScreen';
 import { LogArchive } from './components/ColonyLog/LogArchive';
 import { STORY_LOGS } from './components/ColonyLog/logs';
-import { INITIAL_FUEL, FUEL_TO_LIVES_RATIO, MAX_BONUS_LIVES } from './constants';
+import { INITIAL_FUEL, FUEL_TO_LIVES_RATIO, MAX_BONUS_LIVES, GAME_VERSION } from './constants';
 import { audioService } from './services/audioService';
 import LanderGame from './games/LanderGame';
 import RipOffGame from './games/RipOffGame';
@@ -435,6 +435,7 @@ const App: React.FC = () => {
                         <h1 className="text-[50px] md:text-[80px] text-[#0f0] tracking-[8px] uppercase font-bold text-shadow-glow mb-2 text-center leading-none">
                             THE<br/>HARVEST
                         </h1>
+                        <div className="text-[#555] text-xs tracking-widest mb-1">v{GAME_VERSION}</div>
                         <div className="text-[#fd0] text-xl mb-6 animate-glow-gold">HIGH SCORE: {highScores[0]?.score || 0}</div>
 
                         {/* Act Thumbnails */}

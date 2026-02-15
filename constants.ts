@@ -1,5 +1,7 @@
 import { KeyMap } from './types';
 
+export const GAME_VERSION = '1.4.2';
+
 // Physics - Adjusted for "Floaty" Moon feel
 export const GRAVITY = 0.005; // Very low gravity
 export const THRUST_POWER = 0.025; // Weaker thrust to compensate for low gravity
