@@ -1,5 +1,18 @@
 # The Harvest - Changelog
 
+## [1.4.2] - 2026-02-14
+
+### Added
+- **Falling star effect** - Ambient shooting stars streak across the Act I sky during descent, reinforcing the atmosphere of alien skies. Configurable via `FALLING_STAR` constants (frequency, intensity, speed, tail length, max active)
+
+### Fixed
+- **Liftoff jump from fuel pads** - Ship no longer teleports upward when auto-sequence ignites; engine power ramps up gradually for a smooth liftoff
+- **One-legged landing settling** - Ship now tips to level smoothly when landing on one leg, using angle-based restoring torque on pads instead of relying solely on penetration depth
+- **Landing not registering** - Settle counter now uses a grace period (decrements instead of hard-resetting) so brief bounces during settling don't reset landing detection progress
+- **Pixel gap on landing** - Ship position snaps to exact ground level when landing is confirmed, eliminating the 1-2px gap between legs and pad
+
+---
+
 ## [1.4.1] - 2026-02-11
 
 ### Fixed
