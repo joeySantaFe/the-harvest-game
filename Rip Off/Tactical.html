@@ -1,0 +1,213 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Rip Off - Tactical Data</title>
+    <style>
+        body {
+            background-color: #111;
+            color: #0f0;
+            font-family: 'Courier New', monospace;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 40px;
+        }
+
+        h1 {
+            font-size: 48px;
+            text-shadow: 0 0 20px #0f0;
+            margin-bottom: 10px;
+            text-transform: uppercase;
+            border-bottom: 2px solid #0f0;
+            padding-bottom: 20px;
+            width: 100%;
+            text-align: center;
+        }
+
+        .grid-container {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr); /* 3 Columns */
+            gap: 30px;
+            margin-top: 40px;
+            max-width: 1200px;
+        }
+
+        .card {
+            background: #000;
+            border: 1px solid #333;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            box-shadow: 0 0 30px rgba(0,0,0,0.5);
+            transition: transform 0.2s;
+        }
+        .card:hover {
+            transform: scale(1.02);
+            border-color: #555;
+        }
+
+        canvas {
+            margin-bottom: 20px;
+            background: #050505;
+            border-radius: 50%; /* Radar look */
+            border: 1px solid #222;
+        }
+
+        h2 {
+            margin: 0;
+            font-size: 24px;
+            margin-bottom: 10px;
+        }
+
+        .role {
+            font-weight: bold;
+            background: #222;
+            padding: 5px 10px;
+            border-radius: 4px;
+            font-size: 14px;
+            margin-bottom: 15px;
+            letter-spacing: 1px;
+        }
+
+        p {
+            color: #aaa;
+            text-align: center;
+            line-height: 1.5;
+            font-size: 14px;
+            margin: 0;
+        }
+
+        /* COLOR CLASSES */
+        .red-glow { color: #f04; text-shadow: 0 0 10px #f04; }
+        .orange-glow { color: #fa0; text-shadow: 0 0 10px #fa0; }
+        .purple-glow { color: #b0f; text-shadow: 0 0 10px #b0f; }
+        .blue-glow { color: #0af; text-shadow: 0 0 10px #0af; }
+
+    </style>
+</head>
+<body>
+
+    <h1>Tactical Intelligence</h1>
+
+    <div class="grid-container">
+
+        <!-- CARD 1: BASIC TANK -->
+        <div class="card">
+            <canvas id="c-basic" width="150" height="150"></canvas>
+            <h2 class="red-glow">PIRATE TANK</h2>
+            <div class="role" style="color:#f04">CLASS: MARAUDER</div>
+            <p>
+                The standard enemy unit. Heavily armored treads. 
+                <br><br>
+                <strong>PRIMARY OBJECTIVE:</strong><br> Locate and steal Fuel Canisters.
+                <br><br>
+                <strong>THREAT:</strong> LOW<br>
+                <strong>SPEED:</strong> SLOW
+            </p>
+        </div>
+
+        <!-- CARD 2: DASH TANK -->
+        <div class="card">
+            <canvas id="c-dash" width="150" height="150"></canvas>
+            <h2 class="orange-glow">DASH TANK</h2>
+            <div class="role" style="color:#fa0">CLASS: SPEEDSTER</div>
+            <p>
+                Modified with high-torque engines. Identified by orange hull signature.
+                <br><br>
+                <strong>PRIMARY OBJECTIVE:</strong><br> Rapid fuel extraction. Hard to catch.
+                <br><br>
+                <strong>THREAT:</strong> MEDIUM<br>
+                <strong>SPEED:</strong> FAST
+            </p>
+        </div>
+
+        <!-- CARD 3: HUNTER -->
+        <div class="card">
+            <canvas id="c-hunter" width="150" height="150"></canvas>
+            <h2 class="purple-glow">THE HUNTER</h2>
+            <div class="role" style="color:#b0f">CLASS: ASSASSIN</div>
+            <p>
+                Aggressive vector-wing design. Ignores fuel supplies completely.
+                <br><br>
+                <strong>PRIMARY OBJECTIVE:</strong><br> Destroy the Player.
+                <br><br>
+                <strong>THREAT:</strong> EXTREME<br>
+                <strong>CAPABILITY:</strong> ARMED
+            </p>
+        </div>
+
+    </div>
+
+<script>
+    // --- SHARED RENDERING ENGINE ---
+    // This ensures the graphics look EXACTLY like the game
+
+    const SHAPES = {
+        tankBody: [[12,8], [12,-8], [-12,-8], [-12,8]],
+        tankTreadL: [[14,12], [-14,12], [-14,8], [14,8]],
+        tankTreadR: [[14,-12], [-14,-12], [-14,-8], [14,-8]],
+        tankTurret: [[0,0], [20,0]], 
+        hunterBody: [[15,0], [-5,12], [-5,-12]],
+        hunterWing: [[-5,0], [-15,8], [-15,-8]]
+    };
+
+    function drawVector(ctx, shape, x, y, scale, color) {
+        ctx.beginPath();
+        ctx.strokeStyle = color;
+        ctx.lineWidth = 3;
+        ctx.shadowBlur = 15;
+        ctx.shadowColor = color;
+        
+        // Draw Shape
+        for(let i=0; i<shape.length; i++){
+            let p = shape[i];
+            // Rotate -90 degrees to face up for the card
+            let angle = -Math.PI/2; 
+            let rx = p[0]*Math.cos(angle) - p[1]*Math.sin(angle);
+            let ry = p[0]*Math.sin(angle) + p[1]*Math.cos(angle);
+            
+            let dx = x + rx * scale;
+            let dy = y + ry * scale;
+
+            if(i===0) ctx.moveTo(dx, dy); else ctx.lineTo(dx, dy);
+        }
+        ctx.closePath();
+        ctx.stroke();
+        
+        // Reset Shadow for cleanliness
+        ctx.shadowBlur = 0;
+    }
+
+    function drawTurret(ctx, x, y, scale, color) {
+         ctx.beginPath();
+         ctx.strokeStyle = color;
+         ctx.lineWidth = 3;
+         // Turret facing up
+         ctx.moveTo(x, y);
+         ctx.lineTo(x, y - 20*scale);
+         ctx.stroke();
+    }
+
+    // RENDER BASIC TANK
+    const ctx1 = document.getElementById('c-basic').getContext('2d');
+    drawVector(ctx1, SHAPES.tankBody, 75, 75, 2.5, '#f04');
+    drawVector(ctx1, SHAPES.tankTreadL, 75, 75, 2.5, '#f04');
+    drawVector(ctx1, SHAPES.tankTreadR, 75, 75, 2.5, '#f04');
+    drawTurret(ctx1, 75, 75, 2.5, '#f04');
+
+    // RENDER DASH TANK
+    const ctx2 = document.getElementById('c-dash').getContext('2d');
+    drawVector(ctx2, SHAPES.tankBody, 75, 75, 2.5, '#fa0');
+    drawVector(ctx2, SHAPES.tankTreadL, 75, 75, 2.5, '#fa0');
+    drawVector(ctx2, SHAPES.tankTreadR, 75, 75, 2.5, '#fa0');
+    drawTurret(ctx2, 75, 75, 2.5, '#fa0');
+
+    // RENDER HUNTER
+    const ctx3 = document.getElementById('c-hunter').getContext('2d');
+    drawVector(ctx3, SHAPES.hunterBody, 75, 75, 2.5, '#b0f');
+    drawVector(ctx3, SHAPES.hunterWing, 75, 75, 2.5, '#b0f');
+
+</script>
+</body>
+</html>

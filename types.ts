@@ -64,6 +64,13 @@ export type Debris = {
 
 export type PadType = 'start' | 'fuel' | 'base';
 
+export type CaveZone = {
+  startX: number;
+  endX: number;
+  ceilingSegments: TerrainSegment[];
+  narrowestGap: number;
+};
+
 export type TerrainSegment = {
   x1: number;
   y1: number;

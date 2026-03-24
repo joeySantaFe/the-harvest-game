@@ -1,8 +1,9 @@
 import React, { useEffect, useRef, useState, useCallback } from 'react';
-import { GameActProps, LanderState, KeyMap, Ship, TerrainSegment, Particle, Vector, Debris, ShipSystem, FallingStar } from '../types';
+import { GameActProps, LanderState, KeyMap, Ship, TerrainSegment, CaveZone, Particle, Vector, Debris, ShipSystem, FallingStar } from '../types';
 import { GRAVITY, THRUST_POWER, ROTATION_ACCEL, ROTATION_DRAG, FRICTION, INITIAL_FUEL, SCREEN_COLORS, DEFAULT_KEYMAP, MAX_SAFE_VELOCITY_X, MAX_SAFE_VELOCITY_Y, MAX_SURVIVABLE_VELOCITY_Y, MAX_SAFE_ANGLE, WORLD_WIDTH, MAX_ZOOM, ZOOM_THRESHOLD, MAX_ABSOLUTE_VELOCITY, FALLING_STAR } from '../constants';
 import { audioService } from '../services/audioService';
 import { ArcadeButton } from '../components/ArcadeButton';
+import { generateTerrain, getTerrainYAt, getCeilingYAt, isInCave } from '../game-logic/lander/terrain';
 
 const SYSTEM_LABELS: Record<ShipSystem, string> = {
     'THRUST': 'MAIN THRUST COILS',
@@ -85,6 +86,7 @@ const LanderGame: React.FC<GameActProps> = ({ initialFuel, initialScore, onCompl
   });
   
   const terrainRef = useRef<TerrainSegment[]>([]);
+  const caveZonesRef = useRef<CaveZone[]>([]);
   const particlesRef = useRef<Particle[]>([]);
   const debrisRef = useRef<Debris[]>([]);
   
@@ -96,6 +98,10 @@ const LanderGame: React.FC<GameActProps> = ({ initialFuel, initialScore, onCompl
   const starsRef = useRef<{ x: number; y: number; size: number; isTwinkling: boolean; twinklePhase: number; twinkleSpeed: number; }[]>([]);
   const fallingStarsRef = useRef<FallingStar[]>([]);
   const screenShakeRef = useRef<number>(0);
+  const windRef = useRef<number>(0);
+  const windPhaseRef = useRef<number>(Math.random() * Math.PI * 2);
+  const windIndicatorRef = useRef<HTMLSpanElement>(null);
+  const progressRef = useRef<HTMLDivElement>(null);
   const cameraRef = useRef({ x: 0, y: 0, zoom: 1 });
   const devSettingsRef = useRef({ flameScale: 2.0 });
 
@@ -110,82 +116,10 @@ const LanderGame: React.FC<GameActProps> = ({ initialFuel, initialScore, onCompl
 
   // --- Initialization ---
   const initTerrain = useCallback(() => {
-    const segments: TerrainSegment[] = [];
-    const height = window.innerHeight; // Assume full screen for init
-    
-    // Config for the "Journey"
-    const fuelDepotCount = 3;
-    const playableWidth = WORLD_WIDTH - 600; 
-    const segmentWidth = playableWidth / (fuelDepotCount + 1); 
-
-    let currentX = 0;
-    let currentY = height * 0.6;
-    
-    segments.push({ x1: currentX, y1: currentY, x2: currentX + 300, y2: currentY, multiplier: 0, isPad: false, padType: 'start' });
-    currentX += 300;
-
-    let nextFeatureX = currentX + segmentWidth;
-    let padsPlaced = 0;
-
-    while (currentX < WORLD_WIDTH - 400) { 
-        if (currentX > nextFeatureX && padsPlaced < fuelDepotCount) {
-             const r = Math.random();
-             // Wider pads to accommodate tanks visually
-             let padWidth = 140; 
-             let multiplier = 2;
-             
-             if (r > 0.7) { multiplier = 5; padWidth = 100; } 
-             else if (r > 0.4) { multiplier = 3; padWidth = 140; } 
-             else { multiplier = 2; padWidth = 180; }
-
-             const capacity = 500 + Math.floor(Math.random() * 500);
-
-             segments.push({ 
-                 x1: currentX, y1: currentY, 
-                 x2: currentX + padWidth, y2: currentY, 
-                 multiplier: multiplier, 
-                 isPad: true, 
-                 padType: 'fuel',
-                 fuelMax: capacity,
-                 fuelCurrent: capacity,
-                 tankSide: Math.random() > 0.5 ? 'left' : 'right'
-             });
-             currentX += padWidth;
-             nextFeatureX += segmentWidth;
-             padsPlaced++;
-        } else {
-             const steps = Math.floor(Math.random() * 4) + 2;
-             for (let i = 0; i < steps; i++) {
-                 if (currentX > nextFeatureX && padsPlaced < fuelDepotCount) break;
-                 if (currentX >= WORLD_WIDTH - 400) break;
-
-                 const dx = 30 + Math.random() * 80;
-                 const nextX = Math.min(WORLD_WIDTH - 400, currentX + dx);
-                 let dy = (Math.random() - 0.5) * 250; 
-                 if (currentY < height * 0.2) dy += 80;
-                 if (currentY > height * 0.8) dy -= 80;
-
-                 let nextY = currentY + dy;
-                 nextY = Math.max(height * 0.15, Math.min(height * 0.9, nextY));
-
-                 segments.push({ x1: currentX, y1: currentY, x2: nextX, y2: nextY, multiplier: 0, isPad: false });
-                 currentX = nextX;
-                 currentY = nextY;
-             }
-        }
-    }
-
-    const baseY = height * 0.7;
-    segments.push({ x1: currentX, y1: currentY, x2: currentX + 50, y2: baseY, multiplier: 0, isPad: false });
-    currentX += 50;
-    segments.push({ x1: currentX, y1: baseY, x2: currentX + 300, y2: baseY, multiplier: 10, isPad: true, padType: 'base' });
-    currentX += 300;
-    segments.push({ x1: currentX, y1: baseY, x2: currentX + 100, y2: height * 0.5, multiplier: 0, isPad: false });
-    currentX += 100;
-    segments.push({ x1: currentX, y1: height * 0.5, x2: currentX, y2: height * 2, multiplier: 0, isPad: false });
-    segments.push({ x1: 0, y1: segments[0].y1, x2: 0, y2: height * 2, multiplier: 0, isPad: false });
-
-    terrainRef.current = segments;
+    const height = window.innerHeight;
+    const { terrain, caves } = generateTerrain(height);
+    terrainRef.current = terrain;
+    caveZonesRef.current = caves;
   }, []);
 
   const initStars = (width: number, height: number) => {
@@ -228,13 +162,7 @@ const LanderGame: React.FC<GameActProps> = ({ initialFuel, initialScore, onCompl
   };
 
   const getTerrainY = (x: number): { y: number, segment: TerrainSegment | null } => {
-      for (const seg of terrainRef.current) {
-          if (x >= seg.x1 && x <= seg.x2) {
-              const t = (x - seg.x1) / (seg.x2 - seg.x1);
-              return { y: seg.y1 + t * (seg.y2 - seg.y1), segment: seg };
-          }
-      }
-      return { y: 2000, segment: null };
+      return getTerrainYAt(x, terrainRef.current);
   };
 
   // --- Debris & Explosion Logic ---
@@ -552,12 +480,14 @@ const LanderGame: React.FC<GameActProps> = ({ initialFuel, initialScore, onCompl
 
     if (!ship.dead && !ship.landed) {
         const isAutoSequence = sequenceRef.current.active && sequenceRef.current.mode === 'LIFTOFF';
+        // Allow player control after 0.5s of liftoff (timer counts down from 180, so < 150 = 0.5s elapsed)
+        const liftoffLocked = isAutoSequence && sequenceRef.current.timer > 150;
         const isThrusting = (thrustInput && ship.fuel > 0) || isAutoSequence;
-        
+
         if (isThrusting) {
             ship.enginePower += 0.15;
-            const thrustMultiplier = isAutoSequence ? 0.45 : 1.0; 
-            const fuelCost = isAutoSequence ? 0.2 : 1.0;
+            const thrustMultiplier = liftoffLocked ? 0.45 : 1.0;
+            const fuelCost = liftoffLocked ? 0.2 : 1.0;
             
             // --- SYSTEM DAMAGE EFFECTS: THRUST ---
             // If thrust system is damaged, max power is reduced
@@ -585,7 +515,7 @@ const LanderGame: React.FC<GameActProps> = ({ initialFuel, initialScore, onCompl
         audioService.setThrust(isThrusting);
 
         let inputRot = 0;
-        if (!isAutoSequence) {
+        if (!liftoffLocked) {
             if (keysRef.current[keyMapRef.current.left]) inputRot = -1;
             if (keysRef.current[keyMapRef.current.right]) inputRot = 1;
         }
@@ -601,7 +531,33 @@ const LanderGame: React.FC<GameActProps> = ({ initialFuel, initialScore, onCompl
         ship.angularVel += inputRot * ROTATION_ACCEL;
         ship.angularVel *= ROTATION_DRAG;
         ship.angle += ship.angularVel;
-        ship.vel.y += GRAVITY;
+
+        // Progressive gravity: increases as you travel further right
+        const progressGravity = GRAVITY + (ship.pos.x / WORLD_WIDTH) * 0.002;
+        ship.vel.y += progressGravity;
+
+        // Wind: oscillates based on phase, stronger near caves
+        windPhaseRef.current += 0.002;
+        const baseWind = Math.sin(windPhaseRef.current) * 0.0015 + Math.sin(windPhaseRef.current * 2.7) * 0.0008;
+        const inCave = isInCave(ship.pos.x, caveZonesRef.current);
+        let windMultiplier = inCave ? 2.5 : 1.0;
+
+        // Wind shadow: terrain upwind of the ship blocks wind
+        if (!inCave) {
+            const windDir = baseWind > 0 ? -1 : 1; // check terrain upwind
+            const checkDist = 150; // how far upwind to sample
+            const { y: upwindTerrainY } = getTerrainY(ship.pos.x + windDir * checkDist);
+            const terrainAboveShip = upwindTerrainY - ship.pos.y;
+            // If terrain upwind rises above or near the ship, reduce wind
+            if (terrainAboveShip < 80) {
+                const shelter = Math.max(0, 1 - (terrainAboveShip / 80));
+                windMultiplier *= (1 - shelter * 0.8); // up to 80% reduction
+            }
+        }
+
+        windRef.current = baseWind * windMultiplier;
+        ship.vel.x += windRef.current;
+
         ship.vel.x *= FRICTION;
         ship.vel.y *= FRICTION;
         ship.vel.x = Math.max(-MAX_ABSOLUTE_VELOCITY, Math.min(MAX_ABSOLUTE_VELOCITY, ship.vel.x));
@@ -611,7 +567,16 @@ const LanderGame: React.FC<GameActProps> = ({ initialFuel, initialScore, onCompl
         if (ship.pos.x < 10) { ship.pos.x = 10; ship.vel.x *= -0.5; }
         if (ship.pos.x > WORLD_WIDTH - 10) { ship.pos.x = WORLD_WIDTH - 10; ship.vel.x *= -0.5; }
         
-        // REMOVED CEILING COLLISION
+        // Ceiling collision (caves)
+        const ceilingCheck = getCeilingYAt(ship.pos.x, caveZonesRef.current);
+        if (ceilingCheck) {
+            const shipTop = ship.pos.y - 13; // top of capsule
+            if (shipTop < ceilingCheck.y) {
+                breakShip(ship);
+                ship.dead = true;
+                handleCrash();
+            }
+        }
 
         const rot = ship.angle + Math.PI/2;
         const cos = Math.cos(rot);
@@ -982,6 +947,42 @@ const LanderGame: React.FC<GameActProps> = ({ initialFuel, initialScore, onCompl
     }
     ctx.stroke();
 
+    // Draw cave ceilings
+    for (const cave of caveZonesRef.current) {
+        const cSegs = cave.ceilingSegments;
+        if (cSegs.length > 0) {
+            // Fill ceiling as solid black (rock above) — single closed polygon
+            ctx.fillStyle = '#000';
+            ctx.beginPath();
+            ctx.moveTo(cSegs[0].x1, -1000); // far above screen
+            ctx.lineTo(cSegs[0].x1, cSegs[0].y1);
+            // Trace along all ceiling segments as a connected path
+            for (let i = 0; i < cSegs.length; i++) {
+                if (i === 0) {
+                    ctx.lineTo(cSegs[i].x2, cSegs[i].y2);
+                } else {
+                    // Connect to next segment start if there's a gap
+                    ctx.lineTo(cSegs[i].x1, cSegs[i].y1);
+                    ctx.lineTo(cSegs[i].x2, cSegs[i].y2);
+                }
+            }
+            ctx.lineTo(cSegs[cSegs.length - 1].x2, -1000);
+            ctx.closePath();
+            ctx.fill();
+
+            // Stroke ceiling edge as a single connected line
+            ctx.strokeStyle = SCREEN_COLORS.secondary;
+            ctx.lineWidth = lw;
+            ctx.beginPath();
+            ctx.moveTo(cSegs[0].x1, cSegs[0].y1);
+            for (let i = 0; i < cSegs.length; i++) {
+                if (i > 0) ctx.lineTo(cSegs[i].x1, cSegs[i].y1);
+                ctx.lineTo(cSegs[i].x2, cSegs[i].y2);
+            }
+            ctx.stroke();
+        }
+    }
+
     for (const seg of terrainRef.current) {
         if (seg.isPad) {
             ctx.strokeStyle = SCREEN_COLORS.primary;
@@ -1173,6 +1174,17 @@ const LanderGame: React.FC<GameActProps> = ({ initialFuel, initialScore, onCompl
             const alt = Math.max(0, gY - ship.pos.y - 16).toFixed(0);
             altitudeReadoutRef.current.innerText = alt;
         }
+        if (windIndicatorRef.current) {
+            const w = windRef.current;
+            const absW = Math.abs(w);
+            const arrow = w > 0.0005 ? '>>>' : w < -0.0005 ? '<<<' : w > 0.0002 ? '>>' : w < -0.0002 ? '<<' : w > 0 ? '>' : w < 0 ? '<' : '--';
+            windIndicatorRef.current.innerText = arrow;
+            windIndicatorRef.current.style.color = absW > 0.002 ? '#f04' : absW > 0.001 ? '#fd0' : '#0f0';
+        }
+        if (progressRef.current) {
+            const pct = Math.min(100, Math.max(0, (ship.pos.x / WORLD_WIDTH) * 100));
+            progressRef.current.style.width = `${pct}%`;
+        }
     }
   };
 
@@ -1279,7 +1291,14 @@ const LanderGame: React.FC<GameActProps> = ({ initialFuel, initialScore, onCompl
       <canvas ref={canvasRef} className="block w-full h-full" />
       
       {/* HUD */}
+      <div className="absolute bottom-[60px] left-0 w-full h-[3px] bg-[#111] z-40">
+          <div ref={progressRef} className="h-full bg-[#0af] transition-[width] duration-200" style={{ width: '0%' }} />
+      </div>
       <div className="absolute bottom-0 left-0 w-full h-[60px] bg-black border-t-2 border-[#444] flex items-center justify-between px-8 z-40 text-xl font-bold">
+          <div className="flex items-center gap-2">
+              <span className="text-[#0af]">WIND:</span>
+              <span ref={windIndicatorRef} className="text-[#0f0] w-12 text-center">--</span>
+          </div>
           <div className="flex items-center gap-2">
               <span className="text-[#0af]">ALT:</span>
               <span ref={altitudeReadoutRef} className="text-white w-20">0</span>

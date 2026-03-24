@@ -1,0 +1,938 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Rip Off V14 - Arcade Sound Engine</title>
+    <style>
+        body { margin: 0; background: #000; overflow: hidden; font-family: 'Courier New', monospace; user-select: none; }
+        canvas { display: block; margin: 0 auto; background: #000; }
+        
+        /* UI OVERLAYS */
+        .overlay-screen { 
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%; 
+            background: rgba(0,0,0,0.85); backdrop-filter: blur(5px);
+            display: flex; flex-direction: column; justify-content: center; align-items: center; 
+            z-index: 999; display: none;
+        }
+        
+        h1 { margin: 0 0 10px 0; font-size: 80px; text-shadow: 0 0 20px #0f0; letter-spacing: 5px; color: #0f0; }
+        h2 { margin: 0 0 30px 0; font-size: 50px; text-shadow: 0 0 20px #f00; color: #f00; }
+        
+        .btn-container { display: flex; gap: 40px; margin-top: 30px; pointer-events: auto; }
+        
+        .arcade-btn {
+            border: 2px solid #0f0; padding: 15px 30px; font-family: 'Courier New', monospace; font-size: 24px; font-weight: bold;
+            color: #0f0; background: rgba(0,0,0,0.8); cursor: pointer; transition: all 0.2s; text-transform: uppercase;
+            box-shadow: 0 0 15px rgba(0, 255, 0, 0.2);
+        }
+        .arcade-btn:hover { background: #0f0; color: #000; box-shadow: 0 0 30px rgba(0, 255, 0, 0.8); transform: scale(1.1); }
+        
+        .controls-hint { color: #888; margin-top: 40px; font-size: 14px; text-align: center; line-height: 1.5em; }
+        .p1-c { color: #0f0; } .p2-c { color: #0af; }
+        #gp-status { margin-top: 10px; font-size: 12px; color: #ff0; min-height: 20px; }
+
+        /* BOTTOM BAR */
+        #bottom-bar {
+            position: absolute; bottom: 0; left: 0; width: 100%; height: 45px;
+            background-color: #000; border-top: 2px solid #444;
+            display: flex; align-items: center; justify-content: space-between;
+            padding: 0 30px; box-sizing: border-box; z-index: 100;
+        }
+        
+        .left-stats { display: flex; gap: 40px; }
+        .stat-group { font-size: 20px; font-weight: bold; display: flex; align-items: center; }
+        .stat-label { color: #6688ff; margin-right: 10px; text-shadow: 0 0 2px #00f; }
+        .stat-value { color: #fff; }
+        
+        /* LIVES CANVAS */
+        #life-canvas { background: #000; margin-left: 20px; }
+        
+        .wave-announce { 
+            position: absolute; top: 30%; width: 100%; text-align: center; 
+            font-size: 60px; color: #fff; text-shadow: 0 0 20px #0af; 
+            opacity: 0; transition: opacity 0.5s; pointer-events: none;
+        }
+    </style>
+</head>
+<body>
+
+    <!-- START MENU -->
+    <div id="start-screen" class="overlay-screen" style="display: flex;">
+        <h1>RIP OFF</h1>
+        <p style="color: #fff; letter-spacing: 2px; margin-bottom: 40px;">- PROTECT THE FUEL -</p>
+        <div class="btn-container">
+            <div class="arcade-btn" onclick="startGame(1)">1 PLAYER</div>
+            <div class="arcade-btn" style="border-color: #0af; color: #0af;" onclick="startGame(2)">2 PLAYERS</div>
+        </div>
+        <div id="gp-status">Waiting for controllers...</div>
+        <div class="controls-hint">
+            <span class="p1-c">P1: WASD + SPACE (or Gamepad 1)</span><br>
+            <span class="p2-c">P2: ARROWS + 0 (or Gamepad 2)</span><br>
+            <span style="color:#fff; display:block; margin-top:10px;">ESC to Pause</span>
+        </div>
+    </div>
+
+    <!-- GAME OVER MENU -->
+    <div id="game-over-screen" class="overlay-screen">
+        <h2>GAME OVER</h2>
+        <p id="game-over-reason" style="color:#fff; margin-bottom:20px; font-size:20px;">ALL SHIPS DESTROYED</p>
+        <div class="btn-container">
+            <div class="arcade-btn" onclick="resetGame()">TRY AGAIN</div>
+            <div class="arcade-btn" style="border-color:#fff; color:#fff;" onclick="quitGame()">QUIT</div>
+        </div>
+    </div>
+
+    <!-- PAUSE MENU -->
+    <div id="pause-screen" class="overlay-screen">
+        <h2>PAUSED</h2>
+        <div class="btn-container">
+            <div class="arcade-btn" onclick="togglePause()">RESUME</div>
+            <div class="arcade-btn" style="border-color:#f00; color:#f00;" onclick="quitGame()">QUIT</div>
+        </div>
+    </div>
+
+    <div id="wave-display" class="wave-announce">WAVE 1</div>
+
+    <!-- BOTTOM BAR -->
+    <div id="bottom-bar">
+        <div class="left-stats">
+            <div class="stat-group"><span class="stat-label">Score:</span><span id="ui-score" class="stat-value">0</span></div>
+            <div class="stat-group"><span class="stat-label">Wave:</span><span id="ui-wave" class="stat-value">1</span></div>
+            <div class="stat-group"><span class="stat-label">Fuel:</span><span id="ui-fuel" class="stat-value">8</span></div>
+        </div>
+        <div class="stat-group">
+            <span class="stat-label">Ships:</span>
+            <canvas id="life-canvas" width="200" height="30"></canvas>
+        </div>
+    </div>
+
+    <canvas id="gameCanvas"></canvas>
+
+<script>
+// --- AUDIO ENGINE ---
+const AudioContext = window.AudioContext || window.webkitAudioContext;
+let audioCtx, masterGain;
+
+// ENGINE LOOPS
+let tankEngineNode = null;
+let tankGainNode = null;
+let hunterEngineNode = null;
+let hunterLfo = null;
+let hunterGainNode = null;
+
+function initAudio() {
+    if (!audioCtx) {
+        audioCtx = new AudioContext();
+        masterGain = audioCtx.createGain();
+        masterGain.gain.value = 0.25;
+        masterGain.connect(audioCtx.destination);
+    }
+    if (audioCtx.state === 'suspended') audioCtx.resume();
+    
+    // Initialize Persistent Engine Sounds (Muted initially)
+    if(!tankEngineNode) createEngineSounds();
+}
+
+function createEngineSounds() {
+    const t = audioCtx.currentTime;
+
+    // --- TANK SOUND (Low Throb) ---
+    // Sawtooth wave oscillating in volume
+    tankEngineNode = audioCtx.createOscillator();
+    tankEngineNode.type = 'sawtooth';
+    tankEngineNode.frequency.value = 55; // Low Rumble
+    
+    const tankLfo = audioCtx.createOscillator();
+    tankLfo.type = 'sine';
+    tankLfo.frequency.value = 6; // "Thump-thump-thump" speed
+    
+    const tankLfoGain = audioCtx.createGain();
+    tankLfoGain.gain.value = 500; // Depth of throb
+
+    tankGainNode = audioCtx.createGain();
+    tankGainNode.gain.value = 0; // Start muted
+
+    tankEngineNode.connect(tankGainNode);
+    tankLfo.connect(tankGainNode.gain); // LFO modulates volume
+    tankGainNode.connect(masterGain);
+    
+    tankEngineNode.start(t);
+    tankLfo.start(t);
+
+    // --- HUNTER SOUND (Sci-Fi Warble) ---
+    // Triangle wave oscillating in pitch
+    hunterEngineNode = audioCtx.createOscillator();
+    hunterEngineNode.type = 'triangle';
+    hunterEngineNode.frequency.value = 550; // High pitch
+
+    hunterLfo = audioCtx.createOscillator();
+    hunterLfo.type = 'sine';
+    hunterLfo.frequency.value = 8; // Fast warble
+
+    const hunterLfoAmp = audioCtx.createGain();
+    hunterLfoAmp.gain.value = 40; // How much pitch shifts
+
+    hunterGainNode = audioCtx.createGain();
+    hunterGainNode.gain.value = 0; // Start muted
+
+    hunterLfo.connect(hunterLfoAmp);
+    hunterLfoAmp.connect(hunterEngineNode.frequency); // LFO modulates Pitch
+    hunterEngineNode.connect(hunterGainNode);
+    hunterGainNode.connect(masterGain);
+
+    hunterEngineNode.start(t);
+    hunterLfo.start(t);
+}
+
+function updateEngineSounds(activeEnemies) {
+    if(!audioCtx || gamePaused || !gameRunning) {
+        if(tankGainNode) tankGainNode.gain.setTargetAtTime(0, audioCtx.currentTime, 0.1);
+        if(hunterGainNode) hunterGainNode.gain.setTargetAtTime(0, audioCtx.currentTime, 0.1);
+        return;
+    }
+
+    let hasTank = false;
+    let hasHunter = false;
+
+    activeEnemies.forEach(e => {
+        if(e.type === 'hunter') hasHunter = true;
+        if(e.type === 'basic' || e.type === 'dash') hasTank = true;
+    });
+
+    // Smooth fade in/out
+    const t = audioCtx.currentTime;
+    tankGainNode.gain.setTargetAtTime(hasTank ? 0.15 : 0, t, 0.2);
+    hunterGainNode.gain.setTargetAtTime(hasHunter ? 0.12 : 0, t, 0.2);
+}
+
+const sfx = {
+    playTone: (freq, type, duration, vol=0.2) => {
+        if(!audioCtx) return;
+        const osc = audioCtx.createOscillator();
+        const gain = audioCtx.createGain();
+        osc.type = type;
+        osc.frequency.setValueAtTime(freq, audioCtx.currentTime);
+        gain.gain.setValueAtTime(vol, audioCtx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + duration);
+        osc.connect(gain); gain.connect(masterGain);
+        osc.start(); osc.stop(audioCtx.currentTime + duration + 0.1);
+    },
+    laser: () => {
+        if(!audioCtx) return;
+        const osc = audioCtx.createOscillator();
+        const gain = audioCtx.createGain();
+        osc.type = 'sawtooth';
+        osc.frequency.setValueAtTime(800, audioCtx.currentTime);
+        osc.frequency.exponentialRampToValueAtTime(100, audioCtx.currentTime + 0.15);
+        gain.gain.setValueAtTime(0.2, audioCtx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.15);
+        osc.connect(gain); gain.connect(masterGain);
+        osc.start(); osc.stop(audioCtx.currentTime + 0.2);
+    },
+    enemyLaser: () => {
+        if(!audioCtx) return;
+        const osc = audioCtx.createOscillator();
+        const gain = audioCtx.createGain();
+        osc.type = 'square';
+        osc.frequency.setValueAtTime(200, audioCtx.currentTime);
+        osc.frequency.linearRampToValueAtTime(100, audioCtx.currentTime + 0.2);
+        gain.gain.setValueAtTime(0.2, audioCtx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.2);
+        osc.connect(gain); gain.connect(masterGain);
+        osc.start(); osc.stop(audioCtx.currentTime + 0.2);
+    },
+    explosion: () => {
+        if(!audioCtx) return;
+        const bufSz = audioCtx.sampleRate * 0.5;
+        const buf = audioCtx.createBuffer(1, bufSz, audioCtx.sampleRate);
+        const data = buf.getChannelData(0);
+        for (let i=0; i<bufSz; i++) data[i] = Math.random()*2-1;
+        const noise = audioCtx.createBufferSource();
+        noise.buffer = buf;
+        const gain = audioCtx.createGain();
+        const filter = audioCtx.createBiquadFilter();
+        filter.type = 'lowpass'; filter.frequency.value = 800;
+        gain.gain.setValueAtTime(0.8, audioCtx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.5);
+        noise.connect(filter); filter.connect(gain); gain.connect(masterGain);
+        noise.start();
+    },
+    waveStart: () => {
+        sfx.playTone(200, 'sine', 0.5, 0.5);
+        setTimeout(() => sfx.playTone(400, 'sine', 0.8, 0.5), 200);
+    },
+    oneUp: () => {
+        sfx.playTone(440, 'square', 0.1, 0.3);
+        setTimeout(() => sfx.playTone(660, 'square', 0.1, 0.3), 100);
+        setTimeout(() => sfx.playTone(880, 'square', 0.4, 0.3), 200);
+    }
+};
+
+// --- SETUP ---
+const canvas = document.getElementById("gameCanvas");
+const ctx = canvas.getContext("2d");
+const lifeCanvas = document.getElementById("life-canvas");
+const lifeCtx = lifeCanvas.getContext("2d");
+
+const BAR_HEIGHT = 45; 
+let W = canvas.width = window.innerWidth;
+let H = canvas.height = window.innerHeight - BAR_HEIGHT;
+
+window.addEventListener('resize', () => {
+    W = canvas.width = window.innerWidth;
+    H = canvas.height = window.innerHeight - BAR_HEIGHT;
+});
+
+// --- INPUT ---
+const keys = {};
+const gamepadState = {
+    p1: { x: 0, thrust: false, fire: false },
+    p2: { x: 0, thrust: false, fire: false }
+};
+
+window.addEventListener('keydown', e => {
+    keys[e.code] = true;
+    if(e.code === 'Escape' && gameRunning) togglePause();
+});
+window.addEventListener('keyup', e => keys[e.code] = false);
+
+window.addEventListener("gamepadconnected", e => {
+    document.getElementById("gp-status").innerText = `Gamepad Connected: ${e.gamepad.id}`;
+    document.getElementById("gp-status").style.color = "#0f0";
+});
+
+function pollGamepads() {
+    const gps = navigator.getGamepads();
+    if (!gps) return;
+    const mapGp = (idx, target) => {
+        if (gps[idx]) {
+            target.x = Math.abs(gps[idx].axes[0]) > 0.2 ? gps[idx].axes[0] : 0;
+            target.thrust = gps[idx].buttons[0].pressed || gps[idx].buttons[7].pressed || gps[idx].buttons[12].pressed; 
+            target.fire = gps[idx].buttons[1].pressed || gps[idx].buttons[2].pressed || gps[idx].buttons[5].pressed;
+            
+            if(gps[idx].buttons[9].pressed && gameRunning) {
+                if(!target.pausePressed) { togglePause(); target.pausePressed = true; }
+            } else { target.pausePressed = false; }
+        }
+    };
+    mapGp(0, gamepadState.p1);
+    mapGp(1, gamepadState.p2);
+}
+
+// --- CONFIG & SHAPES ---
+const FRICTION = 0.98;
+const SHAPES = {
+    p1: [[15,0], [-10,10], [-5,0], [-10,-10]],
+    p2: [[15,0], [-10,10], [-5,0], [-10,-10]],
+    tankBody: [[12,8], [12,-8], [-12,-8], [-12,8]],
+    tankTreadL: [[14,12], [-14,12], [-14,8], [14,8]],
+    tankTreadR: [[14,-12], [-14,-12], [-14,-8], [14,-8]],
+    tankTurret: [[0,0], [20,0]], 
+    hunterBody: [[15,0], [-5,12], [-5,-12]],
+    hunterWing: [[-5,0], [-15,8], [-15,-8]],
+    fuel: [[-7,-12], [7,-12], [12,0], [7,12], [-7,12], [-12,0]]
+};
+
+// --- WAVE CONFIGURATION ---
+const WAVE_CONFIG = [
+    // WAVE 1
+    [ 
+        { basic: 1 },
+        { basic: 1 },
+        { basic: 2 },
+        { basic: 2 }
+    ],
+    // WAVE 2
+    [
+        { basic: 2, hunter: 1 },
+        { basic: 2, hunter: 1 },
+        { basic: 3, hunter: 1 },
+        { basic: 3, hunter: 1 }
+    ],
+    // WAVE 3
+    [
+        { basic: 3, hunter: 1 },
+        { basic: 2, dash: 1, hunter: 1 },
+        { basic: 3, dash: 1, hunter: 2 },
+        { basic: 2, dash: 2, hunter: 2 }
+    ]
+];
+
+// --- GAME STATE ---
+let gameRunning = false;
+let gamePaused = false;
+let playerCount = 1;
+let score = 0;
+let lives = 5;
+let nextLifeScore = 5000;
+let wave = 1;
+let round = 0; 
+let screenShake = 0;
+let waveQueue = []; 
+let roundDelayTimer = 0; 
+let spawnTimer = 0;
+let players = [], enemies = [], bullets = [], fuels = [], particles = [];
+
+// --- LIFE UI DRAWING ---
+function drawLivesUI() {
+    lifeCtx.clearRect(0, 0, lifeCanvas.width, lifeCanvas.height);
+    for(let i=0; i<lives; i++) {
+        if(i >= 8) break; 
+        let x = 15 + i * 25;
+        let y = 15;
+        let scale = 0.6;
+        lifeCtx.save();
+        lifeCtx.translate(x, y);
+        lifeCtx.rotate(-Math.PI/2);
+        lifeCtx.beginPath();
+        lifeCtx.strokeStyle = "#0f0";
+        lifeCtx.lineWidth = 2;
+        let shape = SHAPES.p1;
+        for(let j=0; j<shape.length; j++){
+            if(j===0) lifeCtx.moveTo(shape[j][0]*scale, shape[j][1]*scale);
+            else lifeCtx.lineTo(shape[j][0]*scale, shape[j][1]*scale);
+        }
+        lifeCtx.closePath();
+        lifeCtx.stroke();
+        lifeCtx.restore();
+    }
+}
+
+function addScore(pts) {
+    score += pts;
+    if(score >= nextLifeScore) {
+        lives++;
+        nextLifeScore += 5000;
+        sfx.oneUp();
+        drawLivesUI();
+    }
+}
+
+// --- WAVE LOGIC ---
+function startWave() {
+    round = 0;
+    const title = document.getElementById("wave-display");
+    title.innerText = `WAVE ${wave}`;
+    title.style.opacity = 1;
+    sfx.waveStart();
+    setTimeout(() => title.style.opacity = 0, 2000);
+    document.getElementById("ui-wave").innerText = wave;
+    loadRound();
+}
+
+function loadRound() {
+    waveQueue = [];
+    let roundConfig;
+
+    if(wave <= WAVE_CONFIG.length) {
+        roundConfig = WAVE_CONFIG[wave-1][round];
+    } else {
+        let scaler = wave - 3; 
+        roundConfig = {
+            basic: 2 + Math.floor(scaler/2),
+            dash: Math.floor(scaler/3),
+            hunter: 1 + Math.floor(scaler/2)
+        };
+    }
+
+    if(roundConfig) {
+        let mult = (playerCount === 2) ? 1.5 : 1.0;
+        const add = (type, count) => {
+            if(!count) return;
+            let finalCount = Math.ceil(count * mult);
+            for(let i=0; i<finalCount; i++) {
+                waveQueue.push({ 
+                    type: type, 
+                    shoot: (wave >= 3),
+                    speed: 1.0 + (wave > 3 ? 0.1 : 0) 
+                });
+            }
+        };
+        add('basic', roundConfig.basic);
+        add('dash', roundConfig.dash);
+        add('hunter', roundConfig.hunter);
+    }
+}
+
+// --- CORE FUNCTIONS ---
+function startGame(mode) {
+    if(gameRunning) return;
+    playerCount = mode;
+    initAudio();
+    document.getElementById("start-screen").style.display = "none";
+    document.getElementById("game-over-screen").style.display = "none";
+    initEntities();
+    gameRunning = true;
+    gamePaused = false;
+    loop();
+}
+
+function togglePause() {
+    if(!gameRunning) return;
+    gamePaused = !gamePaused;
+    updateEngineSounds([]); // Mute engines on pause
+    document.getElementById("pause-screen").style.display = gamePaused ? "flex" : "none";
+}
+
+function quitGame() {
+    gameRunning = false;
+    gamePaused = false;
+    updateEngineSounds([]); // Kill sound
+    document.getElementById("pause-screen").style.display = "none";
+    document.getElementById("game-over-screen").style.display = "none";
+    document.getElementById("start-screen").style.display = "flex";
+}
+
+function resetGame() {
+    document.getElementById("game-over-screen").style.display = "none";
+    initEntities();
+    gameRunning = true;
+    gamePaused = false;
+    loop();
+}
+
+function initEntities() {
+    players = [];
+    if(playerCount === 1) {
+        players.push(new Player(1, W/2, H/2 + 120));
+    } else {
+        players.push(new Player(1, W/2 - 80, H/2 + 120));
+        players.push(new Player(2, W/2 + 80, H/2 + 120));
+    }
+    enemies = []; bullets = []; particles = []; fuels = [];
+    score = 0;
+    lives = 5;
+    nextLifeScore = 5000;
+    wave = 1;
+    round = 0;
+    screenShake = 0;
+    
+    for(let i=0; i<8; i++) {
+        let row = Math.floor(i/4);
+        let col = i%4;
+        fuels.push(new Fuel(W/2 - 60 + col*40, H/2 - 40 + row*40));
+    }
+    document.getElementById("ui-score").innerText = "0";
+    drawLivesUI();
+    startWave();
+}
+
+function gameOver(reason) {
+    gameRunning = false;
+    updateEngineSounds([]); // Kill sound
+    document.getElementById("game-over-reason").innerText = reason;
+    document.getElementById("game-over-screen").style.display = "flex";
+}
+
+// --- CLASSES ---
+class Entity {
+    constructor(x, y, color) {
+        this.x = x; this.y = y; this.vx = 0; this.vy = 0;
+        this.angle = -Math.PI/2; this.color = color; this.dead = false; this.shape = [];
+    }
+    update() { this.x += this.vx; this.y += this.vy; }
+    drawShape(shapeList, close=true) {
+        ctx.beginPath();
+        for(let i=0; i<shapeList.length; i++){
+            let p = shapeList[i];
+            let rx = p[0]*Math.cos(this.angle) - p[1]*Math.sin(this.angle);
+            let ry = p[0]*Math.sin(this.angle) + p[1]*Math.cos(this.angle);
+            if(i===0) ctx.moveTo(this.x+rx, this.y+ry); else ctx.lineTo(this.x+rx, this.y+ry);
+        }
+        if(close) ctx.closePath();
+        ctx.stroke();
+    }
+    draw() {
+        ctx.strokeStyle = this.color; ctx.lineWidth = 2;
+        ctx.shadowBlur = 10; ctx.shadowColor = this.color;
+        if(this.shape.length > 0) this.drawShape(this.shape);
+        ctx.shadowBlur = 0;
+    }
+}
+
+class Player extends Entity {
+    constructor(id, startX, startY) {
+        super(startX, startY, id===1 ? "#0f0" : "#0af");
+        this.id = id; 
+        this.shape = id===1 ? SHAPES.p1 : SHAPES.p2;
+        this.cooldown = 0; this.respawnTimer = 0;
+        this.homeX = startX; this.homeY = startY;
+        this.invulnFlash = 0;
+    }
+    update() {
+        if(this.respawnTimer > 0) { 
+            this.respawnTimer--; 
+            this.invulnFlash++;
+            this.x += (this.homeX - this.x) * 0.05;
+            this.y += (this.homeY - this.y) * 0.05;
+            return; 
+        }
+        
+        let rot=0, thrust=false, fire=false;
+        if(this.id === 1) {
+            if(keys['KeyA']) rot = -1; if(keys['KeyD']) rot = 1;
+            if(gamepadState.p1.x !== 0) rot = gamepadState.p1.x;
+            if(keys['KeyW'] || gamepadState.p1.thrust) thrust = true;
+            if(keys['Space'] || gamepadState.p1.fire) fire = true;
+        } else {
+            if(keys['ArrowLeft']) rot = -1; if(keys['ArrowRight']) rot = 1;
+            if(gamepadState.p2.x !== 0) rot = gamepadState.p2.x;
+            if(keys['ArrowUp'] || gamepadState.p2.thrust) thrust = true;
+            if(keys['Numpad0'] || keys['Digit0'] || keys['Insert'] || gamepadState.p2.fire) fire = true;
+        }
+
+        this.angle += rot * 0.12;
+        if(thrust) {
+            this.vx += Math.cos(this.angle)*0.4; this.vy += Math.sin(this.angle)*0.4;
+            if(Math.random()>.3) {
+                let px = this.x - Math.cos(this.angle)*15;
+                let py = this.y - Math.sin(this.angle)*15;
+                particles.push(new Particle(px, py, this.color, 0.5));
+            }
+            if(Math.floor(Date.now()/60)%2===0) sfx.playTone(60, 'square', 0.05, 0.1);
+        }
+        this.vx *= FRICTION; this.vy *= FRICTION;
+        super.update();
+
+        if(this.x < -40) this.x = W+40; if(this.x > W+40) this.x = -40;
+        if(this.y < -40) this.y = H+40; if(this.y > H+40) this.y = -40;
+
+        if(this.cooldown>0) this.cooldown--;
+        if(fire && this.cooldown<=0) {
+            bullets.push(new Bullet(this.x, this.y, this.angle, this.color, false));
+            this.vx -= Math.cos(this.angle)*0.5; this.vy -= Math.sin(this.angle)*0.5;
+            sfx.laser();
+            this.cooldown = 10;
+        }
+    }
+    die() {
+        if(this.respawnTimer > 0) return;
+        sfx.explosion();
+        screenShake = 15;
+        createExplosion(this.x, this.y, this.color, 40);
+        lives--;
+        drawLivesUI();
+        if(lives <= 0) {
+            this.dead = true;
+            gameOver("FLEET DESTROYED");
+        } else {
+            this.x = -1000; 
+            this.vx = 0; this.vy = 0;
+            this.respawnTimer = 120;
+        }
+    }
+    draw() {
+        if(this.dead) return;
+        if(this.respawnTimer > 0 && Math.floor(this.invulnFlash/5)%2===0) return;
+        super.draw();
+    }
+}
+
+class Enemy extends Entity {
+    constructor(config) {
+        let c = config.type === 'hunter' ? "#b0f" : (config.type === 'dash' ? "#fa0" : "#f04");
+        super(0,0, c);
+        this.type = config.type;
+        this.speedMod = config.speed || 1.0;
+        this.canShoot = config.shoot;
+        this.shootTimer = Math.random() * 200;
+
+        if(Math.random()<0.5) { this.x = Math.random()<0.5?-80:W+80; this.y = Math.random()*H; }
+        else { this.x = Math.random()*W; this.y = Math.random()<0.5?-80:H+80; }
+        this.carrying = null;
+    }
+    
+    update() {
+        let target = null;
+
+        if(this.canShoot) {
+            this.shootTimer--;
+            if(this.shootTimer <= 0) {
+                let pTarget = null, minD = 600;
+                players.forEach(p => {
+                    if(p.respawnTimer > 0 || p.dead) return;
+                    let d = Math.hypot(p.x-this.x, p.y-this.y);
+                    if(d < minD) { minD=d; pTarget=p; }
+                });
+                if(pTarget) {
+                    let aim = Math.atan2(pTarget.y - this.y, pTarget.x - this.x);
+                    bullets.push(new Bullet(this.x, this.y, aim, "#ff0", true));
+                    sfx.enemyLaser();
+                    this.shootTimer = 120 + Math.random() * 100;
+                } else { this.shootTimer = 60; }
+            }
+        }
+
+        if(this.carrying) {
+            if(!this.carrying.captured) { this.carrying = null; }
+            else {
+                let hitchX = this.x - Math.cos(this.angle) * 20;
+                let hitchY = this.y - Math.sin(this.angle) * 20;
+                let dx = hitchX - this.carrying.x;
+                let dy = hitchY - this.carrying.y;
+                let towAngle = Math.atan2(dy, dx);
+                this.carrying.x = hitchX - Math.cos(towAngle) * 35;
+                this.carrying.y = hitchY - Math.sin(towAngle) * 35;
+                this.carrying.angle = towAngle;
+                this.carrying.vx = 0; this.carrying.vy = 0;
+            }
+        }
+
+        if (this.type === 'hunter') {
+            let minD = Infinity;
+            players.forEach(p => {
+                if(p.respawnTimer > 0 || p.dead) return;
+                let d = Math.hypot(p.x-this.x, p.y-this.y);
+                if(d < minD) { minD = d; target = p; }
+            });
+            
+            if(target) {
+                let ang = Math.atan2(target.y-this.y, target.x-this.x);
+                this.angle = ang;
+                this.vx += Math.cos(ang)*0.12*this.speedMod; 
+                this.vy += Math.sin(ang)*0.12*this.speedMod;
+            } else {
+                this.vx += (Math.random()-0.5)*0.2; this.vy += (Math.random()-0.5)*0.2;
+            }
+        } 
+        else {
+            if(this.carrying) {
+                let escAng = Math.atan2(H/2-this.y, W/2-this.x) + Math.PI;
+                this.angle = escAng; 
+                this.vx += Math.cos(escAng)*0.07*this.speedMod; 
+                this.vy += Math.sin(escAng)*0.07*this.speedMod;
+                
+                if(this.x<-100||this.x>W+100||this.y<-100||this.y>H+100) { 
+                    this.dead=true; 
+                    if(this.carrying) this.carrying.dead=true; 
+                }
+            } else {
+                let minD = Infinity;
+                fuels.forEach(f => {
+                    if(f.dead || f.captured) return;
+                    let d = Math.hypot(f.x-this.x, f.y-this.y);
+                    if(d<minD) { minD=d; target=f; }
+                });
+                
+                if(target) {
+                    let ang = Math.atan2(target.y-this.y, target.x-this.x);
+                    let diff = ang - this.angle;
+                    diff = (diff + Math.PI) % (2 * Math.PI) - Math.PI; 
+                    if (diff < -Math.PI) diff += 2 * Math.PI; 
+                    this.angle += diff * 0.1;
+                    this.vx += Math.cos(this.angle)*0.08*this.speedMod; 
+                    this.vy += Math.sin(this.angle)*0.08*this.speedMod;
+                    
+                    if(Math.hypot(this.x-target.x, this.y-target.y)<30) { 
+                        this.carrying=target; target.captured=true; 
+                    }
+                } else {
+                    this.type = 'hunter';
+                }
+            }
+        }
+
+        enemies.forEach(e => {
+            if(e===this) return;
+            if(Math.hypot(this.x-e.x, this.y-e.y)<40) {
+                let a = Math.atan2(this.y-e.y, this.x-e.x);
+                this.vx += Math.cos(a)*0.1; this.vy += Math.sin(a)*0.1;
+            }
+        });
+
+        let s=Math.hypot(this.vx, this.vy);
+        let max = (this.carrying) ? 1.5 : (this.type==='hunter' ? 3.5 : (this.type==='dash'?3.0:2.2)) * this.speedMod;
+        if(s>max) { this.vx=(this.vx/s)*max; this.vy=(this.vy/s)*max; }
+        
+        super.update();
+    }
+
+    draw() {
+        ctx.strokeStyle = this.color; ctx.lineWidth = 2;
+        ctx.shadowBlur = 10; ctx.shadowColor = this.color;
+        
+        if(this.carrying) {
+            ctx.beginPath();
+            ctx.moveTo(this.x - Math.cos(this.angle)*15, this.y - Math.sin(this.angle)*15);
+            ctx.lineTo(this.carrying.x, this.carrying.y);
+            ctx.stroke();
+        }
+
+        if(this.type === 'hunter') {
+            this.drawShape(SHAPES.hunterBody);
+            this.drawShape(SHAPES.hunterWing);
+        } else {
+            this.drawShape(SHAPES.tankBody);
+            this.drawShape(SHAPES.tankTreadL);
+            this.drawShape(SHAPES.tankTreadR);
+            this.drawShape(SHAPES.tankTurret, false);
+        }
+        ctx.shadowBlur = 0;
+    }
+}
+
+class Bullet extends Entity {
+    constructor(x, y, a, c, isEnemy) { 
+        super(x, y, c); 
+        this.isEnemy = isEnemy;
+        let spd = isEnemy ? 6 : 14; 
+        this.vx = Math.cos(a)*spd; this.vy = Math.sin(a)*spd; 
+        this.life = isEnemy ? 90 : 45; 
+    }
+    draw() { 
+        ctx.fillStyle = this.color; 
+        ctx.shadowBlur = 5; ctx.shadowColor = this.color;
+        ctx.fillRect(this.x-2, this.y-2, 4, 4); 
+        ctx.shadowBlur = 0;
+    }
+    update() { super.update(); this.life--; if(this.life<=0) this.dead=true; }
+}
+
+class Particle {
+    constructor(x, y, c, speedMult=1) {
+        this.x=x; this.y=y; this.color=c; this.life = 20+Math.random()*20;
+        let a=Math.random()*Math.PI*2, s=Math.random()*4*speedMult;
+        this.vx=Math.cos(a)*s; this.vy=Math.sin(a)*s;
+    }
+    update() { this.x+=this.vx; this.y+=this.vy; this.life--; this.vx*=0.95; this.vy*=0.95; }
+    draw() { 
+        ctx.fillStyle = this.color; ctx.globalAlpha = this.life/40; 
+        ctx.fillRect(this.x, this.y, 3, 3); ctx.globalAlpha = 1.0; 
+    }
+}
+
+class Fuel extends Entity {
+    constructor(x, y) { super(x, y, "#08f"); this.shape = SHAPES.fuel; this.captured = false; }
+    update() { 
+        if(!this.captured) { 
+            this.vx*=0.8; this.vy*=0.8; 
+            this.x += this.vx; this.y += this.vy;
+        } 
+    }
+}
+
+function createExplosion(x, y, c, n) { 
+    for(let i=0; i<n; i++) particles.push(new Particle(x, y, c)); 
+}
+
+function drawGrid() {
+    ctx.strokeStyle = "#111"; ctx.lineWidth = 1;
+    const step = 100;
+    let offX = players[0] ? -players[0].x * 0.1 : 0;
+    let offY = players[0] ? -players[0].y * 0.1 : 0;
+    ctx.beginPath();
+    for(let x=offX%step; x<W; x+=step) { ctx.moveTo(x,0); ctx.lineTo(x,H); }
+    for(let y=offY%step; y<H; y+=step) { ctx.moveTo(0,y); ctx.lineTo(W,y); }
+    ctx.stroke();
+}
+
+// --- MAIN LOOP ---
+function loop() {
+    if(!gameRunning) return;
+    requestAnimationFrame(loop);
+    if(gamePaused) return;
+
+    pollGamepads();
+
+    let activeEnemies = enemies.filter(e => !e.dead);
+    
+    // Update Audio
+    updateEngineSounds(activeEnemies);
+
+    // --- ROUND LOGIC ---
+    if(waveQueue.length > 0) {
+        spawnTimer--;
+        if(spawnTimer <= 0) {
+            let config = waveQueue.shift();
+            enemies.push(new Enemy(config));
+            spawnTimer = 60 + Math.random()*60; 
+        }
+    } else if(activeEnemies.length === 0) {
+        if(roundDelayTimer > 0) {
+            roundDelayTimer--;
+        } else {
+            round++;
+            if(round < 4) {
+                roundDelayTimer = 120;
+                loadRound();
+            } else {
+                wave++;
+                startWave();
+            }
+        }
+    }
+
+    ctx.fillStyle = "rgba(5, 5, 5, 0.6)"; 
+    ctx.fillRect(0, 0, W, H);
+    
+    ctx.save();
+    if(screenShake > 0) {
+        let mag = screenShake;
+        ctx.translate((Math.random()-0.5)*mag, (Math.random()-0.5)*mag);
+        screenShake *= 0.9;
+        if(screenShake < 0.5) screenShake = 0;
+    }
+
+    drawGrid();
+
+    document.getElementById("ui-score").innerText = score;
+    let activeFuel = fuels.filter(f => !f.dead);
+    document.getElementById("ui-fuel").innerText = activeFuel.length;
+    
+    if(activeFuel.length === 0) {
+        gameOver("FUEL DEPLETED");
+        ctx.restore();
+        return;
+    }
+
+    fuels.forEach(f => { f.update(); f.draw(); });
+    players.forEach(p => { p.update(); p.draw(); });
+    
+    for(let i=bullets.length-1; i>=0; i--) {
+        let b = bullets[i]; b.update(); b.draw();
+        
+        if(b.isEnemy) {
+            players.forEach(p => {
+                if(p.respawnTimer===0 && !p.dead && Math.hypot(b.x-p.x, b.y-p.y) < 15) {
+                    p.die(); b.dead = true;
+                }
+            });
+        } else {
+            enemies.forEach(e => {
+                if(Math.hypot(b.x-e.x, b.y-e.y) < 30) {
+                    e.dead=true; b.dead=true; 
+                    addScore(e.type==='hunter' ? 250 : (e.type==='dash'?150:100)); 
+                    sfx.explosion(); 
+                    screenShake = 5;
+                    createExplosion(e.x, e.y, e.color, 15);
+                    if(e.carrying) { 
+                        e.carrying.captured=false; 
+                        e.carrying.vx = e.vx; e.carrying.vy = e.vy; 
+                    }
+                }
+            });
+        }
+        if(b.dead) bullets.splice(i, 1);
+    }
+
+    for(let i=enemies.length-1; i>=0; i--) {
+        let e = enemies[i]; e.update(); e.draw();
+        players.forEach(p => {
+            if(p.respawnTimer===0 && !p.dead && Math.hypot(p.x-e.x, p.y-e.y) < 30) {
+                e.dead=true; p.die(); 
+                createExplosion(e.x, e.y, e.color, 20);
+                if(e.carrying) { e.carrying.captured=false; }
+            }
+        });
+        if(e.dead) enemies.splice(i, 1);
+    }
+    
+    for(let i=particles.length-1; i>=0; i--) {
+        let p = particles[i]; p.update(); p.draw(); 
+        if(p.life<=0) particles.splice(i, 1);
+    }
+
+    ctx.restore();
+}
+</script>
+</body>
+</html>

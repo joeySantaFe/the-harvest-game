@@ -1,5 +1,29 @@
 # The Harvest - Changelog
 
+## [1.5.0] - 2026-03-15
+
+### Added
+- **Extended Act I journey** - World doubled from 6000px to 12000px with 7 fuel depots (was 3), requiring strategic fuel management across a longer descent
+- **Cave system** - Two cave zones at ~35% and ~70% of the journey with entry/exit funnels, jagged ceilings, and narrow passages (150-250px gap). Ceiling collision causes crash
+- **Cave fuel pads** - High-risk/high-reward fuel depots inside caves with 8x multiplier and 1000 fuel capacity
+- **Wind system** - Oscillating horizontal wind that shifts direction over time; 2.5x stronger inside caves (thermal drafts). Wind shadow effect reduces wind up to 80% when hugging behind tall terrain
+- **Wind HUD indicator** - Directional arrows (`<`, `<<`, `<<<` / `>`, `>>`, `>>>`) with color-coded severity (green/yellow/red)
+- **Progressive gravity** - Gravity increases from 0.005 to 0.007 as you travel further right (deeper gravity well)
+- **Progress bar** - Thin cyan bar above HUD showing distance traveled as percentage of total journey
+- **Progressive terrain roughness** - Later terrain sections have 1.8x more vertical variation than early sections
+
+### Changed
+- **Fuel depot scaling** - Earlier depots are wider (180px) with more fuel (500-800); later depots are narrower (100-120px) with less fuel (300-600)
+- **Liftoff control** - Player regains thrust and rotation control 0.5 seconds after liftoff (was locked for full 3-second auto-sequence), enabling cave launches
+- **Extracted terrain logic** - Terrain generation moved from LanderGame.tsx monolith into `game-logic/lander/terrain.ts` pure functions, following the Act 2 pattern
+
+### Architecture
+- New `game-logic/lander/terrain.ts` module with `generateTerrain()`, `getTerrainYAt()`, `getCeilingYAt()`, `isInCave()`
+- New `CaveZone` type in `types.ts`
+- `WORLD_WIDTH` constant updated from 6000 to 12000
+
+---
+
 ## [1.4.2] - 2026-02-14
 
 ### Added
@@ -159,6 +183,7 @@
 the-harvest/
 ├── games/           # Game components (LanderGame, RipOffGame, BattlezoneGame)
 ├── game-logic/      # Game logic modules
+│   ├── lander/      # Act I logic (terrain, caves)
 │   └── ripoff/      # Act II logic (ai, entities, physics, waves)
 ├── services/        # Audio and input services
 ├── components/      # UI components

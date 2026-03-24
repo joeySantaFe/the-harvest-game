@@ -1,6 +1,6 @@
 import { KeyMap } from './types';
 
-export const GAME_VERSION = '1.4.2';
+export const GAME_VERSION = '1.5.0';
 
 // Physics - Adjusted for "Floaty" Moon feel
 export const GRAVITY = 0.005; // Very low gravity
@@ -19,7 +19,7 @@ export const MAX_SAFE_ANGLE = 0.2; // Angle limit (approx 11 degrees)
 export const MAX_ABSOLUTE_VELOCITY = 4.0; 
 
 // World
-export const WORLD_WIDTH = 6000; // Wider to accommodate the journey
+export const WORLD_WIDTH = 12000; // Doubled for extended journey with fuel stops
 export const MAX_ZOOM = 2.5;
 export const ZOOM_THRESHOLD = 300; // Altitude at which zoom kicks in
 
@@ -39,7 +39,7 @@ export const DEFAULT_KEYMAP: KeyMap = {
   abort: 'KeyW' 
 };
 
-export const INITIAL_FUEL = 600; // Reduced fuel to force stops (World width 6000 requires ~1000+ fuel to traverse safely)
+export const INITIAL_FUEL = 600; // Reduced fuel to force multiple stops across the 12000px journey
 
 // --- RipOff Game Constants (Act II) ---
 

@@ -23,6 +23,8 @@ the-harvest/
 │   └── BattlezoneGame.tsx   # Act 3: Tank battle (placeholder)
 │
 ├── game-logic/              # Pure logic modules (no React)
+│   ├── lander/              # Act 1 specific logic
+│   │   └── terrain.ts       # Terrain generation, caves, collision helpers
 │   └── ripoff/              # Act 2 specific logic
 │       ├── ai.ts            # Enemy AI behaviors
 │       ├── entities.ts      # Entity factories and updates
@@ -91,6 +93,7 @@ if (enemy.dead) { /* cleanup */ }
 | `types.ts` | All interfaces: `RipOffPlayer`, `RipOffEnemy`, `AppState`, etc. |
 | `constants.ts` | Tuning values: speeds, colors, physics constants |
 | `audioService.ts` | Sound effects via Web Audio API |
+| `game-logic/lander/terrain.ts` | Terrain generation, cave zones, collision helpers |
 | `game-logic/ripoff/ai.ts` | Enemy AI: harvester, sprinter, exterminator behaviors |
 | `game-logic/ripoff/entities.ts` | Entity creation/update functions |
 | `games/RipOffGame.tsx` | Act 2 main component with game loop |

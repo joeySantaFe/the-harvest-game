@@ -1,0 +1,5 @@
+{
+  "name": "The Harvest - Colony Logs",
+  "description": "A retro sci-fi terminal interface for viewing story logs from The Harvest game, inspired by Alien's 'Mother' computer.",
+  "requestFramePermissions": []
+}
