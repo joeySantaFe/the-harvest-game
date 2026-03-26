@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState, useCallback } from 'react';
 import { GameActProps, LanderState, KeyMap, Ship, TerrainSegment, CaveZone, Particle, Vector, Debris, ShipSystem, FallingStar } from '../types';
-import { GRAVITY, THRUST_POWER, ROTATION_ACCEL, ROTATION_DRAG, FRICTION, INITIAL_FUEL, SCREEN_COLORS, DEFAULT_KEYMAP, MAX_SAFE_VELOCITY_X, MAX_SAFE_VELOCITY_Y, MAX_SURVIVABLE_VELOCITY_Y, MAX_SAFE_ANGLE, WORLD_WIDTH, MAX_ZOOM, ZOOM_THRESHOLD, MAX_ABSOLUTE_VELOCITY, FALLING_STAR } from '../constants';
+import { GRAVITY, THRUST_POWER, ROTATION_ACCEL, ROTATION_DRAG, FRICTION, INITIAL_FUEL, SCREEN_COLORS, DEFAULT_KEYMAP, MAX_SAFE_VELOCITY_X, MAX_SAFE_VELOCITY_Y, MAX_SURVIVABLE_VELOCITY_Y, MAX_SAFE_ANGLE, WORLD_WIDTH, MAX_ZOOM, ZOOM_THRESHOLD, MAX_ABSOLUTE_VELOCITY, FALLING_STAR, TANK_PROXIMITY_RADIUS, TANK_DIRECT_HIT_RADIUS, TANK_EXPLOSION_SPEED, TANK_DAMAGE_SPEED, TANK_LEAK_RATE } from '../constants';
 import { audioService } from '../services/audioService';
 import { ArcadeButton } from '../components/ArcadeButton';
 import { generateTerrain, getTerrainYAt, getCeilingYAt, isInCave } from '../game-logic/lander/terrain';
@@ -98,6 +98,7 @@ const LanderGame: React.FC<GameActProps> = ({ initialFuel, initialScore, onCompl
   const starsRef = useRef<{ x: number; y: number; size: number; isTwinkling: boolean; twinklePhase: number; twinkleSpeed: number; }[]>([]);
   const fallingStarsRef = useRef<FallingStar[]>([]);
   const screenShakeRef = useRef<number>(0);
+  const scheduledExplosionsRef = useRef<Array<{x: number, y: number, delay: number, fuelRatio: number}>>([]);
   const windRef = useRef<number>(0);
   const windPhaseRef = useRef<number>(Math.random() * Math.PI * 2);
   const windIndicatorRef = useRef<HTMLSpanElement>(null);
@@ -224,6 +225,135 @@ const LanderGame: React.FC<GameActProps> = ({ initialFuel, initialScore, onCompl
             life: 40 + Math.random() * 30, maxLife: 70, color: rand > 0.7 ? '#fff' : (rand < 0.3 ? '#888' : '#aaa')
         });
     }
+  };
+
+  // --- Fuel Tank Crash System ---
+
+  const getTankCenter = (seg: TerrainSegment): { x: number, y: number } | null => {
+    if (seg.padType !== 'fuel' || seg.fuelMax === undefined) return null;
+    const tankW = 20;
+    const tankH = 60;
+    const tankX = seg.tankSide === 'left'
+      ? seg.x1 + 5 + tankW / 2
+      : seg.x2 - tankW - 5 + tankW / 2;
+    const tankY = seg.y1 - tankH / 2;
+    return { x: tankX, y: tankY };
+  };
+
+  type TankCrashTier = 'minor' | 'moderate' | 'explosion';
+
+  const checkFuelTankCrash = (
+    crashX: number, crashY: number, impactSpeed: number
+  ): { tier: TankCrashTier | null; segment: TerrainSegment | null } => {
+    for (const seg of terrainRef.current) {
+      if (seg.padType !== 'fuel' || !seg.fuelCurrent || seg.fuelCurrent <= 0) continue;
+      if (seg.tankState === 'destroyed') continue;
+
+      const center = getTankCenter(seg);
+      if (!center) continue;
+
+      const dist = Math.hypot(crashX - center.x, crashY - center.y);
+      if (dist > TANK_PROXIMITY_RADIUS) continue;
+
+      const isDirect = dist < TANK_DIRECT_HIT_RADIUS;
+
+      if (isDirect && impactSpeed >= TANK_EXPLOSION_SPEED) {
+        return { tier: 'explosion', segment: seg };
+      } else if (impactSpeed >= TANK_DAMAGE_SPEED || isDirect) {
+        return { tier: 'moderate', segment: seg };
+      } else {
+        return { tier: 'minor', segment: seg };
+      }
+    }
+    return { tier: null, segment: null };
+  };
+
+  const createFuelExplosion = (seg: TerrainSegment) => {
+    const center = getTankCenter(seg)!;
+    const fuelRatio = (seg.fuelCurrent ?? 0) / (seg.fuelMax ?? 1);
+    const baseCount = 120;
+    const fuelBonus = Math.floor(fuelRatio * 180);
+    const totalParticles = baseCount + fuelBonus;
+
+    const colors = ['#f90', '#ff0', '#fff', '#4af', '#f04', '#fa0', '#ff6', '#08f'];
+
+    for (let i = 0; i < totalParticles; i++) {
+      const angle = Math.random() * Math.PI * 2;
+      const speed = Math.random() * 6 + 1;
+      particlesRef.current.push({
+        x: center.x + (Math.random() - 0.5) * 20,
+        y: center.y + (Math.random() - 0.5) * 40,
+        vx: Math.cos(angle) * speed,
+        vy: Math.sin(angle) * speed - 1,
+        life: 80 + Math.random() * 120,
+        maxLife: 200,
+        color: colors[Math.floor(Math.random() * colors.length)]
+      });
+    }
+
+    // Tank debris
+    const tankDebrisShapes: Vector[][] = [
+      [{x:-5,y:-8},{x:5,y:-8},{x:5,y:0},{x:-5,y:0}],
+      [{x:-4,y:-6},{x:4,y:-6},{x:3,y:0},{x:-3,y:0}],
+      [{x:-3,y:-3},{x:3,y:-3},{x:3,y:3},{x:-3,y:3}],
+    ];
+    const tankDebrisCount = 6 + Math.floor(fuelRatio * 2);
+    for (let i = 0; i < tankDebrisCount; i++) {
+      const shape = tankDebrisShapes[i % tankDebrisShapes.length];
+      debrisRef.current.push({
+        x: center.x + (Math.random() - 0.5) * 15,
+        y: center.y + (Math.random() - 0.5) * 30,
+        vx: (Math.random() - 0.5) * 5,
+        vy: -Math.random() * 4 - 1,
+        angle: Math.random() * Math.PI * 2,
+        vAngle: (Math.random() - 0.5) * 0.4,
+        color: Math.random() > 0.5 ? '#888' : '#555',
+        shape: shape,
+        life: 250
+      });
+    }
+
+    screenShakeRef.current = 35 + fuelRatio * 15;
+    audioService.playExplosion();
+
+    // Schedule secondary explosions
+    scheduledExplosionsRef.current.push(
+      { x: center.x + 15, y: center.y - 10, delay: 12, fuelRatio },
+      { x: center.x - 10, y: center.y + 5, delay: 25, fuelRatio },
+      { x: center.x + 5, y: center.y - 25, delay: 40, fuelRatio }
+    );
+
+    seg.tankState = 'destroyed';
+    seg.fuelCurrent = 0;
+  };
+
+  const createTankDamageEffect = (seg: TerrainSegment) => {
+    const center = getTankCenter(seg)!;
+    createSparks(center.x, center.y);
+    createExplosion(center.x, center.y, '#fa0');
+    screenShakeRef.current = Math.max(screenShakeRef.current, 12);
+  };
+
+  const handleShipCrash = (ship: Ship) => {
+    const impactSpeed = Math.hypot(ship.vel.x, ship.vel.y);
+    const { tier, segment } = checkFuelTankCrash(ship.pos.x, ship.pos.y, impactSpeed);
+
+    breakShip(ship);
+
+    if (tier === 'explosion' && segment) {
+      createFuelExplosion(segment);
+    } else if (tier === 'moderate' && segment) {
+      createTankDamageEffect(segment);
+      segment.tankState = 'leaking';
+      segment.tankLeakRate = TANK_LEAK_RATE * 2;
+    } else if (tier === 'minor' && segment) {
+      createTankDamageEffect(segment);
+      segment.tankState = 'leaking';
+      segment.tankLeakRate = TANK_LEAK_RATE;
+    }
+
+    ship.dead = true;
+    handleCrash();
   };
 
   // --- Report Generation & Systems Logic ---
@@ -573,9 +703,7 @@ const LanderGame: React.FC<GameActProps> = ({ initialFuel, initialScore, onCompl
         if (ceilingCheck) {
             const shipTop = ship.pos.y - 13; // top of capsule
             if (shipTop < ceilingCheck.y) {
-                breakShip(ship);
-                ship.dead = true;
-                handleCrash();
+                handleShipCrash(ship);
             }
         }
 
@@ -591,9 +719,7 @@ const LanderGame: React.FC<GameActProps> = ({ initialFuel, initialScore, onCompl
 
         const { y: terrainY } = getTerrainY(ship.pos.x);
         if (ship.pos.y + 12 > terrainY) {
-            breakShip(ship);
-            ship.dead = true;
-            handleCrash();
+            handleShipCrash(ship);
         } else {
             const tL = getTerrainY(wxL);
             const tR = getTerrainY(wxR);
@@ -606,9 +732,7 @@ const LanderGame: React.FC<GameActProps> = ({ initialFuel, initialScore, onCompl
                 totalDepth += depth;
                 const impactV = Math.abs(ship.vel.y);
                 if (impactV > MAX_SURVIVABLE_VELOCITY_Y) {
-                    breakShip(ship);
-                    ship.dead = true;
-                    handleCrash();
+                    handleShipCrash(ship);
                     return 0;
                 }
 
@@ -660,9 +784,7 @@ const LanderGame: React.FC<GameActProps> = ({ initialFuel, initialScore, onCompl
                  
                  // Apply instant kill if accumulated damage in this frame is too high
                  if (ship.integrity - legDamage <= 0) {
-                      breakShip(ship);
-                      ship.dead = true;
-                      handleCrash();
+                      handleShipCrash(ship);
                       return;
                  }
 
@@ -823,6 +945,52 @@ const LanderGame: React.FC<GameActProps> = ({ initialFuel, initialScore, onCompl
 
     particlesRef.current.forEach(p => { p.x += p.vx; p.y += p.vy; p.life--; });
     particlesRef.current = particlesRef.current.filter(p => p.life > 0);
+
+    // --- Scheduled Secondary Explosions ---
+    scheduledExplosionsRef.current = scheduledExplosionsRef.current.filter(e => {
+      e.delay--;
+      if (e.delay <= 0) {
+        const count = 30 + Math.floor(e.fuelRatio * 40);
+        const colors = ['#f90', '#ff0', '#fff', '#f04'];
+        for (let i = 0; i < count; i++) {
+          const angle = Math.random() * Math.PI * 2;
+          const speed = Math.random() * 4;
+          particlesRef.current.push({
+            x: e.x, y: e.y,
+            vx: Math.cos(angle) * speed, vy: Math.sin(angle) * speed,
+            life: 40 + Math.random() * 40, maxLife: 80,
+            color: colors[Math.floor(Math.random() * colors.length)]
+          });
+        }
+        screenShakeRef.current = Math.max(screenShakeRef.current, 15);
+        audioService.playExplosion();
+        return false;
+      }
+      return true;
+    });
+
+    // --- Leaking Fuel Tanks ---
+    terrainRef.current.forEach(seg => {
+      if (seg.tankState === 'leaking' && seg.fuelCurrent && seg.fuelCurrent > 0) {
+        seg.fuelCurrent = Math.max(0, seg.fuelCurrent - (seg.tankLeakRate ?? TANK_LEAK_RATE));
+        if (Math.random() > 0.6) {
+          const center = getTankCenter(seg);
+          if (center) {
+            particlesRef.current.push({
+              x: center.x + (Math.random() - 0.5) * 10,
+              y: center.y + 30,
+              vx: (Math.random() - 0.5) * 0.5,
+              vy: Math.random() * 1 + 0.5,
+              life: 20 + Math.random() * 20, maxLife: 40,
+              color: Math.random() > 0.5 ? '#0f0' : '#0a0'
+            });
+          }
+        }
+        if (seg.fuelCurrent <= 0) {
+          seg.tankState = 'destroyed';
+        }
+      }
+    });
 
     // --- Falling Stars ---
     if (FALLING_STAR.INTENSITY > 0 && canvasRef.current) {
@@ -1006,60 +1174,69 @@ const LanderGame: React.FC<GameActProps> = ({ initialFuel, initialScore, onCompl
             if (seg.padType === 'fuel' && seg.fuelMax !== undefined && seg.fuelCurrent !== undefined) {
                 const tankW = 20 * lw;
                 const tankH = 60 * lw;
-                const fillPct = seg.fuelCurrent / seg.fuelMax;
-                const fillH = tankH * fillPct;
-                
-                // Color based on fill
-                const tankColor = fillPct > 0.5 ? '#0f0' : (fillPct > 0.2 ? '#fd0' : '#f04');
-                
-                // Determine X based on assigned side, sitting ON the pad
                 const tankX = seg.tankSide === 'left' ? seg.x1 + (5 * lw) : seg.x2 - tankW - (5 * lw);
                 const baseY = seg.y1;
 
-                // Draw Single Tank
-                const drawTank = (x: number) => {
-                     // Outline with Rounded Top
-                     ctx.strokeStyle = '#555';
-                     ctx.lineWidth = lw;
-                     
-                     ctx.beginPath();
-                     // Start bottom left
-                     ctx.moveTo(x, baseY);
-                     // Line up
-                     ctx.lineTo(x, baseY - tankH + 10);
-                     // Curve Top Left
-                     ctx.quadraticCurveTo(x, baseY - tankH, x + 10, baseY - tankH);
-                     // Line across top
-                     ctx.lineTo(x + tankW - 10, baseY - tankH);
-                     // Curve Top Right
-                     ctx.quadraticCurveTo(x + tankW, baseY - tankH, x + tankW, baseY - tankH + 10);
-                     // Line down
-                     ctx.lineTo(x + tankW, baseY);
-                     // Close
-                     ctx.lineTo(x, baseY);
-                     ctx.stroke();
-                     
-                     // Fill
-                     if (fillPct > 0) {
-                         ctx.fillStyle = tankColor;
-                         // Clipping region for the rounded shape so fill stays inside
-                         ctx.save();
-                         ctx.clip(); // Use the path defined above
-                         ctx.fillRect(x, baseY - fillH, tankW, fillH);
-                         ctx.restore();
-                     }
+                if (seg.tankState === 'destroyed') {
+                    // Charred stump
+                    ctx.strokeStyle = '#333';
+                    ctx.lineWidth = lw;
+                    ctx.beginPath();
+                    ctx.moveTo(tankX, baseY);
+                    ctx.lineTo(tankX + 2 * lw, baseY - 8 * lw);
+                    ctx.lineTo(tankX + 6 * lw, baseY - 12 * lw);
+                    ctx.lineTo(tankX + 10 * lw, baseY - 10 * lw);
+                    ctx.lineTo(tankX + 14 * lw, baseY - 14 * lw);
+                    ctx.lineTo(tankX + 18 * lw, baseY - 8 * lw);
+                    ctx.lineTo(tankX + tankW, baseY);
+                    ctx.stroke();
+                    // Scorch marks
+                    ctx.fillStyle = 'rgba(40, 20, 0, 0.5)';
+                    ctx.fillRect(tankX - 2 * lw, baseY - 2 * lw, tankW + 4 * lw, 3 * lw);
+                } else {
+                    const fillPct = seg.fuelCurrent / seg.fuelMax;
+                    const fillH = tankH * fillPct;
+                    const tankColor = fillPct > 0.5 ? '#0f0' : (fillPct > 0.2 ? '#fd0' : '#f04');
 
-                     // Little antenna detail on top
-                     ctx.strokeStyle = '#555';
-                     ctx.beginPath(); ctx.moveTo(x + tankW/2, baseY - tankH); ctx.lineTo(x + tankW/2, baseY - tankH - (10*lw)); ctx.stroke();
-                     // Blinking light
-                     if (Math.floor(Date.now() / 500) % 2 === 0) {
-                        ctx.fillStyle = '#f04';
-                        ctx.fillRect(x + tankW/2 - lw, baseY - tankH - (12*lw), 2*lw, 2*lw);
-                     }
-                };
+                    const drawTank = (x: number) => {
+                         ctx.strokeStyle = seg.tankState === 'leaking' ? '#a50' : '#555';
+                         ctx.lineWidth = lw;
+                         if (seg.tankState === 'leaking') {
+                             ctx.setLineDash([4 * lw, 3 * lw]);
+                         }
 
-                drawTank(tankX);
+                         ctx.beginPath();
+                         ctx.moveTo(x, baseY);
+                         ctx.lineTo(x, baseY - tankH + 10);
+                         ctx.quadraticCurveTo(x, baseY - tankH, x + 10, baseY - tankH);
+                         ctx.lineTo(x + tankW - 10, baseY - tankH);
+                         ctx.quadraticCurveTo(x + tankW, baseY - tankH, x + tankW, baseY - tankH + 10);
+                         ctx.lineTo(x + tankW, baseY);
+                         ctx.lineTo(x, baseY);
+                         ctx.stroke();
+
+                         if (seg.tankState === 'leaking') {
+                             ctx.setLineDash([]);
+                         }
+
+                         if (fillPct > 0) {
+                             ctx.fillStyle = tankColor;
+                             ctx.save();
+                             ctx.clip();
+                             ctx.fillRect(x, baseY - fillH, tankW, fillH);
+                             ctx.restore();
+                         }
+
+                         ctx.strokeStyle = '#555';
+                         ctx.beginPath(); ctx.moveTo(x + tankW/2, baseY - tankH); ctx.lineTo(x + tankW/2, baseY - tankH - (10*lw)); ctx.stroke();
+                         if (Math.floor(Date.now() / 500) % 2 === 0) {
+                            ctx.fillStyle = seg.tankState === 'leaking' ? '#fa0' : '#f04';
+                            ctx.fillRect(x + tankW/2 - lw, baseY - tankH - (12*lw), 2*lw, 2*lw);
+                         }
+                    };
+
+                    drawTank(tankX);
+                }
             }
         }
     }

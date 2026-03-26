@@ -79,9 +79,11 @@ export type TerrainSegment = {
   multiplier: number; 
   isPad: boolean;
   padType?: PadType; 
-  fuelMax?: number;     
+  fuelMax?: number;
   fuelCurrent?: number;
-  tankSide?: 'left' | 'right'; 
+  tankSide?: 'left' | 'right';
+  tankState?: 'intact' | 'leaking' | 'destroyed';
+  tankLeakRate?: number;
 };
 
 export type ShipSystem = 'THRUST' | 'STABILITY' | 'HULL' | 'COMMS';

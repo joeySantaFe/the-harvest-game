@@ -1,6 +1,6 @@
 import { KeyMap } from './types';
 
-export const GAME_VERSION = '1.5.2';
+export const GAME_VERSION = '1.6.0';
 
 // Physics - Adjusted for "Floaty" Moon feel
 export const GRAVITY = 0.005; // Very low gravity
@@ -16,7 +16,14 @@ export const MAX_SAFE_VELOCITY_Y = 0.5; // Green Zone (Strict perfect landing - 
 export const MAX_SURVIVABLE_VELOCITY_Y = 1.5; // Yellow Zone (Damage threshold - 15.0 m/s)
 export const MAX_SAFE_VELOCITY_X = 0.8; // Horizontal limit (8.0 m/s)
 export const MAX_SAFE_ANGLE = 0.2; // Angle limit (approx 11 degrees)
-export const MAX_ABSOLUTE_VELOCITY = 4.0; 
+export const MAX_ABSOLUTE_VELOCITY = 4.0;
+
+// Fuel Tank Crash Consequences
+export const TANK_PROXIMITY_RADIUS = 40;
+export const TANK_DIRECT_HIT_RADIUS = 25;
+export const TANK_EXPLOSION_SPEED = 1.0;
+export const TANK_DAMAGE_SPEED = 0.6;
+export const TANK_LEAK_RATE = 2;
 
 // World
 export const WORLD_WIDTH = 12000; // Doubled for extended journey with fuel stops
