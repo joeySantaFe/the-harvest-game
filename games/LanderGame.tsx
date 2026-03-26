@@ -494,8 +494,82 @@ const LanderGame: React.FC<GameActProps> = ({ initialFuel, initialScore, onCompl
   // --- Main Update Loop ---
   const update = () => {
     // IMPORTANT: Check ref here instead of state variable, because closure captures initial state
-    if (internalStateRef.current !== LanderState.PLAYING) {
-        audioService.setThrust(false); 
+    if (internalStateRef.current !== LanderState.PLAYING && internalStateRef.current !== LanderState.CRASHED) {
+        audioService.setThrust(false);
+        return;
+    }
+
+    // When crashed, only update particles/debris/effects — skip ship physics
+    if (internalStateRef.current === LanderState.CRASHED) {
+        audioService.setThrust(false);
+
+        // Debris physics
+        debrisRef.current.forEach(d => {
+            d.x += d.vx; d.y += d.vy; d.angle += d.vAngle; d.vy += GRAVITY;
+            const { y: gY } = getTerrainY(d.x);
+            if (d.y > gY) { d.y = gY; d.vy *= -0.5; d.vx *= 0.8; d.vAngle *= 0.8; }
+            d.life--;
+        });
+        debrisRef.current = debrisRef.current.filter(d => d.life > 0);
+
+        // Particle physics
+        particlesRef.current.forEach(p => {
+            p.x += p.vx; p.y += p.vy; p.vy += GRAVITY; p.life--;
+            const { y: gY } = getTerrainY(p.x);
+            if (p.y > gY) { p.y = gY; p.vy *= -0.3; p.vx *= 0.7; }
+        });
+        particlesRef.current = particlesRef.current.filter(p => p.life > 0);
+
+        // Scheduled secondary explosions
+        scheduledExplosionsRef.current = scheduledExplosionsRef.current.filter(e => {
+            e.delay--;
+            if (e.delay <= 0) {
+                const count = 40 + Math.floor(e.fuelRatio * 50);
+                const colors = ['#f90', '#ff0', '#fff', '#f04', '#fa0', '#ff6'];
+                for (let i = 0; i < count; i++) {
+                    const angle = Math.random() * Math.PI * 2;
+                    const speed = Math.random() * 5 + 1;
+                    particlesRef.current.push({
+                        x: e.x, y: e.y,
+                        vx: Math.cos(angle) * speed, vy: Math.sin(angle) * speed - 2,
+                        life: 80 + Math.random() * 80, maxLife: 160,
+                        color: colors[Math.floor(Math.random() * colors.length)]
+                    });
+                }
+                screenShakeRef.current = Math.max(screenShakeRef.current, 18);
+                audioService.playExplosion();
+                return false;
+            }
+            return true;
+        });
+
+        // Leaking fuel tanks
+        terrainRef.current.forEach(seg => {
+            if (seg.tankState === 'leaking' && seg.fuelCurrent && seg.fuelCurrent > 0) {
+                seg.fuelCurrent = Math.max(0, seg.fuelCurrent - (seg.tankLeakRate ?? TANK_LEAK_RATE));
+                if (Math.random() > 0.6) {
+                    const center = getTankCenter(seg);
+                    if (center) {
+                        particlesRef.current.push({
+                            x: center.x + (Math.random() - 0.5) * 10,
+                            y: center.y + 30,
+                            vx: (Math.random() - 0.5) * 0.5,
+                            vy: Math.random() * 1 + 0.5,
+                            life: 20 + Math.random() * 20, maxLife: 40,
+                            color: Math.random() > 0.5 ? '#0f0' : '#0a0'
+                        });
+                    }
+                }
+                if (seg.fuelCurrent <= 0) seg.tankState = 'destroyed';
+            }
+        });
+
+        // Screen shake decay
+        if (screenShakeRef.current > 0) {
+            screenShakeRef.current *= 0.95;
+            if (screenShakeRef.current < 0.5) screenShakeRef.current = 0;
+        }
+
         return;
     }
     
