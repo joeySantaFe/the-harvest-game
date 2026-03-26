@@ -353,7 +353,9 @@ const LanderGame: React.FC<GameActProps> = ({ initialFuel, initialScore, onCompl
     }
 
     ship.dead = true;
-    handleCrash();
+    // Longer delay for fuel explosions so the player sees the full destruction
+    const crashDelay = tier === 'explosion' ? 6000 : tier === 'moderate' ? 4000 : 2500;
+    handleCrash(crashDelay);
   };
 
   // --- Report Generation & Systems Logic ---
@@ -1059,13 +1061,13 @@ const LanderGame: React.FC<GameActProps> = ({ initialFuel, initialScore, onCompl
     }
   };
 
-  const handleCrash = () => {
+  const handleCrash = (delayMs: number = 2500) => {
     setInternalState(LanderState.CRASHED);
     audioService.stopAct1Sfx();
     if (statusOverlayRef.current) statusOverlayRef.current.innerText = 'CRITICAL FAILURE';
     setTimeout(() => {
         onFailure(currentScoreRef.current);
-    }, 2500);
+    }, delayMs);
   };
 
   const draw = () => {
