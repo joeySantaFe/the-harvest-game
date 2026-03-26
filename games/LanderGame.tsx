@@ -824,7 +824,7 @@ const LanderGame: React.FC<GameActProps> = ({ initialFuel, initialScore, onCompl
 
                 if (seg.tankState !== 'leaking') {
                   seg.tankState = 'leaking';
-                  seg.tankLeakRate = TANK_LEAK_RATE;
+                  seg.tankLeakRate = 0.05;
                 }
               }
               break;
