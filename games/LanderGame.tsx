@@ -277,50 +277,54 @@ const LanderGame: React.FC<GameActProps> = ({ initialFuel, initialScore, onCompl
 
     const colors = ['#f90', '#ff0', '#fff', '#4af', '#f04', '#fa0', '#ff6', '#08f'];
 
+    // Primary burst — strong upward bias so particles arc and rain down
     for (let i = 0; i < totalParticles; i++) {
       const angle = Math.random() * Math.PI * 2;
-      const speed = Math.random() * 6 + 1;
+      const speed = Math.random() * 8 + 2;
       particlesRef.current.push({
         x: center.x + (Math.random() - 0.5) * 20,
         y: center.y + (Math.random() - 0.5) * 40,
         vx: Math.cos(angle) * speed,
-        vy: Math.sin(angle) * speed - 1,
-        life: 80 + Math.random() * 120,
-        maxLife: 200,
+        vy: Math.sin(angle) * speed - 3,
+        life: 150 + Math.random() * 150,
+        maxLife: 300,
         color: colors[Math.floor(Math.random() * colors.length)]
       });
     }
 
-    // Tank debris
+    // Tank debris — bigger pieces flung high
     const tankDebrisShapes: Vector[][] = [
       [{x:-5,y:-8},{x:5,y:-8},{x:5,y:0},{x:-5,y:0}],
       [{x:-4,y:-6},{x:4,y:-6},{x:3,y:0},{x:-3,y:0}],
       [{x:-3,y:-3},{x:3,y:-3},{x:3,y:3},{x:-3,y:3}],
     ];
-    const tankDebrisCount = 6 + Math.floor(fuelRatio * 2);
+    const tankDebrisCount = 8 + Math.floor(fuelRatio * 4);
     for (let i = 0; i < tankDebrisCount; i++) {
       const shape = tankDebrisShapes[i % tankDebrisShapes.length];
       debrisRef.current.push({
         x: center.x + (Math.random() - 0.5) * 15,
         y: center.y + (Math.random() - 0.5) * 30,
-        vx: (Math.random() - 0.5) * 5,
-        vy: -Math.random() * 4 - 1,
+        vx: (Math.random() - 0.5) * 6,
+        vy: -Math.random() * 5 - 2,
         angle: Math.random() * Math.PI * 2,
         vAngle: (Math.random() - 0.5) * 0.4,
         color: Math.random() > 0.5 ? '#888' : '#555',
         shape: shape,
-        life: 250
+        life: 350
       });
     }
 
     screenShakeRef.current = 35 + fuelRatio * 15;
     audioService.playExplosion();
 
-    // Schedule secondary explosions
+    // Staggered secondary explosions over ~3 seconds for sustained spectacle
     scheduledExplosionsRef.current.push(
-      { x: center.x + 15, y: center.y - 10, delay: 12, fuelRatio },
-      { x: center.x - 10, y: center.y + 5, delay: 25, fuelRatio },
-      { x: center.x + 5, y: center.y - 25, delay: 40, fuelRatio }
+      { x: center.x + 20, y: center.y - 15, delay: 15, fuelRatio },
+      { x: center.x - 15, y: center.y + 5, delay: 35, fuelRatio },
+      { x: center.x + 5, y: center.y - 30, delay: 60, fuelRatio },
+      { x: center.x - 25, y: center.y - 10, delay: 90, fuelRatio },
+      { x: center.x + 10, y: center.y + 10, delay: 120, fuelRatio },
+      { x: center.x, y: center.y - 20, delay: 160, fuelRatio }
     );
 
     seg.tankState = 'destroyed';
@@ -968,26 +972,31 @@ const LanderGame: React.FC<GameActProps> = ({ initialFuel, initialScore, onCompl
     cam.y += (targetCamY - cam.y) * 0.02; 
     cam.zoom += (targetZoom - cam.zoom) * 0.01; // Reduced to 0.01 (half speed)
 
-    particlesRef.current.forEach(p => { p.x += p.vx; p.y += p.vy; p.life--; });
+    particlesRef.current.forEach(p => {
+      p.x += p.vx; p.y += p.vy; p.vy += GRAVITY; p.life--;
+      // Ground collision
+      const { y: gY } = getTerrainY(p.x);
+      if (p.y > gY) { p.y = gY; p.vy *= -0.3; p.vx *= 0.7; }
+    });
     particlesRef.current = particlesRef.current.filter(p => p.life > 0);
 
     // --- Scheduled Secondary Explosions ---
     scheduledExplosionsRef.current = scheduledExplosionsRef.current.filter(e => {
       e.delay--;
       if (e.delay <= 0) {
-        const count = 30 + Math.floor(e.fuelRatio * 40);
-        const colors = ['#f90', '#ff0', '#fff', '#f04'];
+        const count = 40 + Math.floor(e.fuelRatio * 50);
+        const colors = ['#f90', '#ff0', '#fff', '#f04', '#fa0', '#ff6'];
         for (let i = 0; i < count; i++) {
           const angle = Math.random() * Math.PI * 2;
-          const speed = Math.random() * 4;
+          const speed = Math.random() * 5 + 1;
           particlesRef.current.push({
             x: e.x, y: e.y,
-            vx: Math.cos(angle) * speed, vy: Math.sin(angle) * speed,
-            life: 40 + Math.random() * 40, maxLife: 80,
+            vx: Math.cos(angle) * speed, vy: Math.sin(angle) * speed - 2,
+            life: 80 + Math.random() * 80, maxLife: 160,
             color: colors[Math.floor(Math.random() * colors.length)]
           });
         }
-        screenShakeRef.current = Math.max(screenShakeRef.current, 15);
+        screenShakeRef.current = Math.max(screenShakeRef.current, 18);
         audioService.playExplosion();
         return false;
       }
