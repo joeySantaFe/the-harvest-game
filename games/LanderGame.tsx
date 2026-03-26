@@ -698,6 +698,29 @@ const LanderGame: React.FC<GameActProps> = ({ initialFuel, initialScore, onCompl
         if (ship.pos.x < 10) { ship.pos.x = 10; ship.vel.x *= -0.5; }
         if (ship.pos.x > WORLD_WIDTH - 10) { ship.pos.x = WORLD_WIDTH - 10; ship.vel.x *= -0.5; }
         
+        // Fuel tank body collision
+        if (!ship.dead) {
+          for (const seg of terrainRef.current) {
+            if (seg.padType !== 'fuel' || seg.tankState === 'destroyed') continue;
+            if (seg.fuelMax === undefined) continue;
+            const tankW = 20;
+            const tankH = 60;
+            const tankLeft = seg.tankSide === 'left' ? seg.x1 + 5 : seg.x2 - tankW - 5;
+            const tankRight = tankLeft + tankW;
+            const tankTop = seg.y1 - tankH;
+            const tankBottom = seg.y1;
+            // Ship bounding circle (radius ~13px)
+            const shipR = 13;
+            const closestX = Math.max(tankLeft, Math.min(ship.pos.x, tankRight));
+            const closestY = Math.max(tankTop, Math.min(ship.pos.y, tankBottom));
+            const dist = Math.hypot(ship.pos.x - closestX, ship.pos.y - closestY);
+            if (dist < shipR) {
+              handleShipCrash(ship);
+              break;
+            }
+          }
+        }
+
         // Ceiling collision (caves)
         const ceilingCheck = getCeilingYAt(ship.pos.x, caveZonesRef.current);
         if (ceilingCheck) {
