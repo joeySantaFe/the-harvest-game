@@ -1,4 +1,8 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useImperativeHandle, forwardRef } from 'react';
+
+export interface TypewriterHandle {
+  skip: () => void;
+}
 
 interface TypewriterProps {
   text: string;
@@ -8,27 +12,38 @@ interface TypewriterProps {
   className?: string;
 }
 
-export const Typewriter: React.FC<TypewriterProps> = ({
+export const Typewriter = forwardRef<TypewriterHandle, TypewriterProps>(({
   text,
   speed = 15,
   onComplete,
   onCharacter,
   className = '',
-}) => {
+}, ref) => {
   const [displayedText, setDisplayedText] = useState('');
   const completedRef = useRef(false);
   const onCompleteRef = useRef(onComplete);
   const onCharacterRef = useRef(onCharacter);
+  const timeoutRef = useRef<ReturnType<typeof setTimeout>>();
 
   // Keep refs current without triggering effect re-runs
   onCompleteRef.current = onComplete;
   onCharacterRef.current = onCharacter;
 
+  useImperativeHandle(ref, () => ({
+    skip: () => {
+      if (!completedRef.current) {
+        if (timeoutRef.current) clearTimeout(timeoutRef.current);
+        setDisplayedText(text);
+        completedRef.current = true;
+        onCompleteRef.current?.();
+      }
+    },
+  }), [text]);
+
   useEffect(() => {
     setDisplayedText('');
     completedRef.current = false;
     let i = 0;
-    let timeoutId: ReturnType<typeof setTimeout>;
 
     const typeChar = () => {
       if (i < text.length) {
@@ -36,16 +51,16 @@ export const Typewriter: React.FC<TypewriterProps> = ({
         onCharacterRef.current?.();
         i++;
         const randomSpeed = speed + (Math.random() * 20 - 10);
-        timeoutId = setTimeout(typeChar, Math.max(5, randomSpeed));
+        timeoutRef.current = setTimeout(typeChar, Math.max(5, randomSpeed));
       } else if (!completedRef.current) {
         completedRef.current = true;
         onCompleteRef.current?.();
       }
     };
 
-    timeoutId = setTimeout(typeChar, speed);
+    timeoutRef.current = setTimeout(typeChar, speed);
 
-    return () => clearTimeout(timeoutId);
+    return () => { if (timeoutRef.current) clearTimeout(timeoutRef.current); };
   }, [text, speed]);
 
   return (
@@ -60,4 +75,4 @@ export const Typewriter: React.FC<TypewriterProps> = ({
       />
     </div>
   );
-};
+});

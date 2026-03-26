@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { LogEntry } from './colonyLogTypes';
 import { CRTOverlay } from './CRTOverlay';
-import { Typewriter } from './Typewriter';
+import { Typewriter, TypewriterHandle } from './Typewriter';
 import { audioService } from '../../services/audioService';
 
 type Phase = 'boot' | 'display' | 'complete';
@@ -17,6 +17,7 @@ export const ColonyLogScreen: React.FC<ColonyLogScreenProps> = ({ log, onContinu
   const [showContinue, setShowContinue] = useState(false);
   const [fadingOut, setFadingOut] = useState(false);
   const mountedRef = useRef(true);
+  const typewriterRef = useRef<TypewriterHandle>(null);
 
   // Start/stop terminal hum on mount/unmount
   useEffect(() => {
@@ -74,11 +75,29 @@ export const ColonyLogScreen: React.FC<ColonyLogScreenProps> = ({ log, onContinu
     if (fadingOut) return;
     audioService.playTerminalClick();
     setFadingOut(true);
-    // Let the fade-out play, then transition
     setTimeout(() => {
       onContinue();
     }, 800);
   }, [fadingOut, onContinue]);
+
+  // Escape key: skip boot/typewriter on first press, continue on second
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.code !== 'Escape' || fadingOut) return;
+
+      if (phase === 'boot') {
+        setBootProgress(100);
+        setPhase('display');
+      } else if (phase === 'display') {
+        typewriterRef.current?.skip();
+      } else if (phase === 'complete') {
+        handleContinueClick();
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [phase, fadingOut, handleContinueClick]);
 
   return (
     <div
@@ -193,6 +212,7 @@ export const ColonyLogScreen: React.FC<ColonyLogScreenProps> = ({ log, onContinu
             >
               <div className="text-lg leading-relaxed" style={{ color: 'rgba(51, 255, 51, 0.9)' }}>
                 <Typewriter
+                  ref={typewriterRef}
                   text={log.content}
                   speed={18}
                   onComplete={handleTypewriterComplete}
