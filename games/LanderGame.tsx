@@ -333,10 +333,9 @@ const LanderGame: React.FC<GameActProps> = ({ initialFuel, initialScore, onCompl
              });
          }, 2000); // Increased wait so user can see Mission Complete
      } else if (segment.padType === 'fuel') {
-         const fuelBonus = segment.multiplier * 150;
          sequenceRef.current = {
              active: true, mode: 'LANDING',
-             targetFuel: Math.min(INITIAL_FUEL, ship.fuel + fuelBonus),
+             targetFuel: Math.min(INITIAL_FUEL, ship.fuel + segment.fuelCurrent),
              timer: 90, // 1.5 seconds at 60fps for landing sound to finish
              padSegment: segment
          };
