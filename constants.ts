@@ -1,6 +1,6 @@
 import { KeyMap } from './types';
 
-export const GAME_VERSION = '1.5.0';
+export const GAME_VERSION = '1.5.1';
 
 // Physics - Adjusted for "Floaty" Moon feel
 export const GRAVITY = 0.005; // Very low gravity
