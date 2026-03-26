@@ -19,6 +19,7 @@ const SFX_PATHS = {
   motherStartup: `${base}sfx/mother-startup.mp3`,
   motherStartup2: `${base}sfx/mother-startup2.mp3`,
   motherBeep: `${base}sfx/mother-beep.mp3`,
+  explosionLevel3: `${base}sfx/explosion-level3.mp3`,
 };
 
 class AudioService {
@@ -153,11 +154,40 @@ class AudioService {
     this.playTone(1200, 'sine', 0.08, 0.1);
   }
 
-  playExplosion() {
-    this.setThrust(false); // Cut engines on death
+  // Level 1: Small procedural noise burst (sparks, minor impacts)
+  playExplosionLevel1() {
     if (!this.ctx || !this.masterGain || this.isMuted) return;
-    
-    // Noise Burst
+
+    const duration = 0.4;
+    const bufferSize = this.ctx.sampleRate * duration;
+    const buffer = this.ctx.createBuffer(1, bufferSize, this.ctx.sampleRate);
+    const data = buffer.getChannelData(0);
+    for (let i = 0; i < bufferSize; i++) {
+      data[i] = Math.random() * 2 - 1;
+    }
+    const noise = this.ctx.createBufferSource();
+    noise.buffer = buffer;
+
+    const filter = this.ctx.createBiquadFilter();
+    filter.type = 'lowpass';
+    filter.frequency.setValueAtTime(600, this.ctx.currentTime);
+    filter.frequency.exponentialRampToValueAtTime(80, this.ctx.currentTime + duration);
+
+    const g = this.ctx.createGain();
+    g.gain.setValueAtTime(0.5, this.ctx.currentTime);
+    g.gain.exponentialRampToValueAtTime(0.01, this.ctx.currentTime + duration);
+
+    noise.connect(filter);
+    filter.connect(g);
+    g.connect(this.masterGain);
+    noise.start();
+  }
+
+  // Level 2: Standard procedural explosion (ship crash, moderate tank hit)
+  playExplosionLevel2() {
+    this.setThrust(false);
+    if (!this.ctx || !this.masterGain || this.isMuted) return;
+
     const duration = 0.8;
     const bufferSize = this.ctx.sampleRate * duration;
     const buffer = this.ctx.createBuffer(1, bufferSize, this.ctx.sampleRate);
@@ -167,7 +197,7 @@ class AudioService {
     }
     const noise = this.ctx.createBufferSource();
     noise.buffer = buffer;
-    
+
     const filter = this.ctx.createBiquadFilter();
     filter.type = 'lowpass';
     filter.frequency.setValueAtTime(800, this.ctx.currentTime);
@@ -181,6 +211,20 @@ class AudioService {
     filter.connect(g);
     g.connect(this.masterGain);
     noise.start();
+  }
+
+  // Level 3: Massive fuel tank explosion (mp3 sample)
+  playExplosionLevel3() {
+    this.setThrust(false);
+    if (this.isMuted) return;
+    const sound = new Audio(SFX_PATHS.explosionLevel3);
+    sound.volume = 1.0;
+    sound.play().catch(() => {});
+  }
+
+  // Backwards-compatible alias
+  playExplosion() {
+    this.playExplosionLevel2();
   }
 
   playSuccess() {

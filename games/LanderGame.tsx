@@ -189,7 +189,7 @@ const LanderGame: React.FC<GameActProps> = ({ initialFuel, initialScore, onCompl
     createDebris([{x: 0, y: 0}, {x: 6, y: 10}], 9, 6, -0.2);
     createExplosion(ship.pos.x, ship.pos.y, '#f04');
     screenShakeRef.current = 20;
-    audioService.playExplosion();
+    audioService.playExplosionLevel2();
   };
 
   const createExplosion = (x: number, y: number, color: string) => {
@@ -315,7 +315,7 @@ const LanderGame: React.FC<GameActProps> = ({ initialFuel, initialScore, onCompl
     }
 
     screenShakeRef.current = 35 + fuelRatio * 15;
-    audioService.playExplosion();
+    audioService.playExplosionLevel3();
 
     // Staggered secondary explosions over ~3 seconds for sustained spectacle
     scheduledExplosionsRef.current.push(
@@ -336,6 +336,7 @@ const LanderGame: React.FC<GameActProps> = ({ initialFuel, initialScore, onCompl
     createSparks(center.x, center.y);
     createExplosion(center.x, center.y, '#fa0');
     screenShakeRef.current = Math.max(screenShakeRef.current, 12);
+    audioService.playExplosionLevel1();
   };
 
   const handleShipCrash = (ship: Ship) => {
@@ -537,7 +538,7 @@ const LanderGame: React.FC<GameActProps> = ({ initialFuel, initialScore, onCompl
                     });
                 }
                 screenShakeRef.current = Math.max(screenShakeRef.current, 18);
-                audioService.playExplosion();
+                audioService.playExplosionLevel1();
                 return false;
             }
             return true;
@@ -1071,7 +1072,7 @@ const LanderGame: React.FC<GameActProps> = ({ initialFuel, initialScore, onCompl
           });
         }
         screenShakeRef.current = Math.max(screenShakeRef.current, 18);
-        audioService.playExplosion();
+        audioService.playExplosionLevel1();
         return false;
       }
       return true;
