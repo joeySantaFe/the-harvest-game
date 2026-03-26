@@ -790,13 +790,43 @@ const LanderGame: React.FC<GameActProps> = ({ initialFuel, initialScore, onCompl
             const tankRight = tankLeft + tankW;
             const tankTop = seg.y1 - tankH;
             const tankBottom = seg.y1;
-            // Ship bounding circle (radius ~13px)
             const shipR = 13;
             const closestX = Math.max(tankLeft, Math.min(ship.pos.x, tankRight));
             const closestY = Math.max(tankTop, Math.min(ship.pos.y, tankBottom));
             const dist = Math.hypot(ship.pos.x - closestX, ship.pos.y - closestY);
             if (dist < shipR) {
-              handleShipCrash(ship);
+              const impactSpeed = Math.hypot(ship.vel.x, ship.vel.y);
+              const center = getTankCenter(seg);
+              const distToCenter = center ? Math.hypot(ship.pos.x - center.x, ship.pos.y - center.y) : 999;
+              const isDirect = distToCenter < TANK_DIRECT_HIT_RADIUS;
+
+              if (isDirect && impactSpeed >= TANK_EXPLOSION_SPEED) {
+                // Level 3: Spectacular explosion — fatal
+                handleShipCrash(ship);
+              } else if (impactSpeed >= TANK_DAMAGE_SPEED || isDirect) {
+                // Level 2: Moderate — fatal
+                handleShipCrash(ship);
+              } else {
+                // Level 1: Minor — survive with damage, bounce off, tank leaks
+                const overlap = shipR - dist;
+                const nx = dist > 0 ? (ship.pos.x - closestX) / dist : 0;
+                const ny = dist > 0 ? (ship.pos.y - closestY) / dist : -1;
+                ship.pos.x += nx * (overlap + 1);
+                ship.pos.y += ny * (overlap + 1);
+                ship.vel.x = -ship.vel.x * 0.4 + nx * 0.3;
+                ship.vel.y = -ship.vel.y * 0.4 + ny * 0.3;
+
+                const damage = 5 + impactSpeed * 15;
+                applyDamage(damage);
+                createSparks(closestX, closestY);
+                audioService.playExplosionLevel1();
+                screenShakeRef.current = Math.max(screenShakeRef.current, 6);
+
+                if (seg.tankState !== 'leaking') {
+                  seg.tankState = 'leaking';
+                  seg.tankLeakRate = TANK_LEAK_RATE;
+                }
+              }
               break;
             }
           }
