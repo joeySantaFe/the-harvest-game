@@ -276,6 +276,8 @@ const LanderGame: React.FC<GameActProps> = ({ initialFuel, initialScore, onCompl
      ship.angle = -Math.PI/2;
      // Snap ship to exact ground position (leg tip is 16px below center when upright)
      ship.pos.y = segment.y1 - 16;
+     ship.enginePower = 0;
+     audioService.setThrust(false);
      audioService.playLanding();
      audioService.stopBackgroundHum();
      
